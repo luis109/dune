@@ -53,6 +53,8 @@ namespace Transports
     {
       // Status message.
       CidStatusMsg cid_status_msg;
+      // Calibration message
+      CidCalAction cid_cal_action;  
       // Ping protocol messages.
       CidPingRequestMsg  cid_ping_req_msg;
       CidPingSendMsg  cid_ping_send_msg;
@@ -544,6 +546,12 @@ namespace Transports
                                        ((uint8_t)data_Beacon.cid_dat_send_msg.packet_len));
           message_build += data_Beacon.cid_dat_send_msg.packet_data;
           break;
+        
+        case CID_CAL_ACTION:
+        {
+          message_build += String::str("%02X", (uint8_t)data_Beacon.cid_cal_action.action);
+          break;
+        }
 
         case CID_SETTINGS_SET:
         {

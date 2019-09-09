@@ -137,6 +137,19 @@ namespace Transports
       BT_X150 = 0x31B
     };
 
+    // Calibration actions
+    enum CAL_ACTION_E
+    {
+      CAL_ACC_DEFAULTS = 0x0,
+      CAL_ACC_RESET = 0x1,
+      CAL_ACC_CALC = 0x2,
+      CAL_MAG_DEFAULTS = 0x3,
+      CAL_MAG_RESET = 0x4,
+      CAL_MAG_CALC = 0x5,
+      CAL_PRES_OFFSET_RESET = 0x6,
+      CAL_PRES_OFFSET_CALC = 0x7
+    };
+
 
     // Status Output Mode
     enum StatusMode_E
