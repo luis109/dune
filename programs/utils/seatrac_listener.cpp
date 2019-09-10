@@ -26,25 +26,6 @@ int sock_fd;
 struct sockaddr_in servaddr; 
 int addrlen = sizeof(servaddr);
 
-// Parse Seatrac sentence (from buffer) into string (copied from Seatrac task)
-void readSentence(char *bfr, size_t rv)
-{
-    for (size_t i = 0; i < rv; ++i)
-    {
-        // Detected line termination (end of sentence)
-        if (bfr[i] == '\n')
-            return;
-        else
-        {
-            // Preamble for received messages is '$'
-            if (bfr[i] == Transports::Seatrac::c_preamble)
-                m_data.clear();    // Clear the output string, just in case...
-            else if (bfr[i] != '\r')
-                m_data.push_back(bfr[i]);  // Add data to output string
-        }
-    }
-}
-
 // Print acofix data
 void printAcoFix(Transports::Seatrac::Acofix_t& aco_fix)
 {
@@ -182,10 +163,10 @@ dataPrint(uint16_t message_type, Transports::Seatrac::DataSeatrac& data_Beacon)
             if (data_Beacon.cid_status_msg.outputflags_list[2])
             {
                 cout << "-Magnetometer calibration status-" << endl;
-                cout << "Mag. calibration progress: " << data_Beacon.cid_status_msg.mag_cal_buf << "%" << endl;
-                cout << "Mag. calibration validity: " << data_Beacon.cid_status_msg.mag_cal_valid << endl;
+                cout << "Mag. calibration progress: " << DUNE::Utils::String::str("%d", data_Beacon.cid_status_msg.mag_cal_buf) << " %" << endl;
+                cout << "Mag. calibration validity: " << DUNE::Utils::String::str("%d", data_Beacon.cid_status_msg.mag_cal_valid) << endl;
                 cout << "Mag. calibration age: " << data_Beacon.cid_status_msg.mag_cal_age << " seconds" << endl;
-                cout << "Mag. calibration fit: " << data_Beacon.cid_status_msg.mag_cal_fit << "%" << endl;
+                cout << "Mag. calibration fit: " << DUNE::Utils::String::str("%d", data_Beacon.cid_status_msg.mag_cal_fit) << " %" << endl;
             }
 
             // Acc cal.
@@ -476,12 +457,45 @@ dataPrint(uint16_t message_type, Transports::Seatrac::DataSeatrac& data_Beacon)
             cout << endl;
             break;
 
+        case Transports::Seatrac::CID_SETTINGS_SET:
+            cout << "--Settings SET--" << endl;
+            cout << "Status: ";
+            switch (data_Beacon.cid_sys_settings_set_msg.status){
+                case Transports::Seatrac::CST_OK:
+                    cout << "OK (The command was performed successfully)";
+                    break;
+                case Transports::Seatrac::CST_CMD_PARAM_MISSING:
+                    cout << "Missing parameter (The settings parameter were not specified correctly)";
+                    break;
+                default: break;
+            }
+            cout << endl;
+            break;
+
+        case Transports::Seatrac::CID_CAL_ACTION:
+            cout << "--Calibration action--" << endl;
+            cout << "Status: ";
+            switch (data_Beacon.cid_cal_action_msg.status){
+                case Transports::Seatrac::CST_OK:
+                    cout << "OK (The command was performed successfully)";
+                    break;
+                case Transports::Seatrac::CST_CMD_PARAM_MISSING:
+                    cout << "Missing parameter (The ACTION parameter was not specified correctly)";
+                    break;
+                default: 
+                    string resp = DUNE::Utils::String::str("%02X",(uint16_t) data_Beacon.cid_cal_action_msg.status);
+                    cout << "Unknown response: " << resp << endl;
+                    break;
+            }
+            cout << endl;
+            break;
+
         case  Transports::Seatrac::CID_SETTINGS_SAVE:
             cout << "--Settings save--" << endl;
             cout << "Status: ";
             switch (data_Beacon.cid_settings_save_msg.status){
                 case Transports::Seatrac::CST_OK:
-                    cout << "OK (The command was performed successfully";
+                    cout << "OK (The command was performed successfully)";
                     break;
                 case Transports::Seatrac::CST_FAIL:
                     cout << "FAIL (The settings could not be saved)";
@@ -603,6 +617,41 @@ dataPrint(uint16_t message_type, Transports::Seatrac::DataSeatrac& data_Beacon)
 }
 
 /*** Helper functions ***/
+// Parse Seatrac sentence (from buffer) into string (partially copied from Seatrac task)
+// Returns length of 
+int readSentence(double timeout)
+{
+    char data[16] = {0};
+    int len = 0;
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    // Read from input buffer bit by bit, as the modem sends data in chunks
+    // A valid sentence is prefixed by $, and ends with \n\r
+    // We must keep reading data until a valid sentence is obtained
+    while(len < Transports::Seatrac::c_bfr_size){
+        int rv = read(sock_fd, data, 1);
+        if(data[0] == '\n')
+            return len;
+        else {
+            if (data[0] == Transports::Seatrac::c_preamble){
+                m_data.clear();
+                clock_gettime(CLOCK_MONOTONIC, &end);
+            } else if (data[0] != '\r'){
+                m_data.push_back(*data);
+                clock_gettime(CLOCK_MONOTONIC, &end);
+                len++;
+            }
+        }
+        if((end.tv_sec - start.tv_sec) > timeout){
+            cout << "Timeout waiting for data" << endl;
+            break;
+        }
+    }
+
+    return 0;
+}
+
 // Signal handler for SIGINT (keyboard interrupt CTRL+C)
 void sigint_handle(int sig){
     cout << "Interrupted, closing TCP socket" << endl;
@@ -668,15 +717,16 @@ int main(int argc, char **argv){
     double timeout = 5.0;
     struct timespec last_recv, lap;
     while(true){
-         // Read data incoming from TCP socket
-        char incoming[Transports::Seatrac::c_bfr_size];
-        size_t resp = read( sock_fd , incoming, Transports::Seatrac::c_bfr_size);
-        
-        // Parse it and print it out
-        if (resp > 0){
-            // Output received message to string, without preamble
-            readSentence(incoming, resp);
-
+        // Output received message to string, without preamble
+        // char bfr[Transports::Seatrac::c_bfr_size];
+        // size_t rv = read( sock_fd, bfr, Transports::Seatrac::c_bfr_size);
+        int len = readSentence(5.0);
+        if (len > 0){
+            // If CRC passes, parse the message and display it
+            cout << endl << "[NEW MESSAGE]" << endl;
+            cout << "Length: " << len << endl;
+            cout << "Sentence: \"$" << m_data << "\"" << endl;
+            
             // Get CRC from message
             uint16_t crc, crc2;
             string msg = DUNE::Utils::String::fromHex(m_data.substr((m_data.size() - 4), 4));
@@ -691,16 +741,14 @@ int main(int argc, char **argv){
                 cerr << "Error: Invalid CRC, message dropped" << endl;
             }
             else {
-                // If CRC passes, parse the message and display it
-                cout << endl << "[NEW MESSAGE]" << endl;
-                cout << "Length: " << resp << endl;
-                cout << "Sentence: \"$" << m_data << "\"" << endl;
                 const char *msg_raw = m_datahex.data();
                 uint16_t typemes = 0;
                 memcpy(&typemes, msg_raw, 1);
                 Transports::Seatrac::DataSeatrac m_data_beacon;
                 dataParser(typemes, msg_raw + 1, m_data_beacon);
                 dataPrint(typemes, m_data_beacon);
+                m_data.clear();
+                m_datahex.clear();
             }
             clock_gettime(CLOCK_MONOTONIC, &last_recv);
         } else {
