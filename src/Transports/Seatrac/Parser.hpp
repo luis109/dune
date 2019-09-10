@@ -54,7 +54,8 @@ namespace Transports
       // Status message.
       CidStatusMsg cid_status_msg;
       // Calibration message
-      CidCalAction cid_cal_action;  
+      CidCalAction cid_cal_action;
+      CidCalActionMsg cid_cal_action_msg;  
       // Ping protocol messages.
       CidPingRequestMsg  cid_ping_req_msg;
       CidPingSendMsg  cid_ping_send_msg;
@@ -269,6 +270,16 @@ namespace Transports
             std::memcpy(&data_Beacon.cid_status_msg.ahrs_comp_gyro_y, msg_raw + ind + 28,4);
             std::memcpy(&data_Beacon.cid_status_msg.ahrs_comp_gyro_z, msg_raw + ind + 32,4);
           }
+          break;
+        
+        case CID_CAL_ACTION:
+          data_Beacon.set(CID_CAL_ACTION);
+          std::memcpy(&data_Beacon.cid_cal_action_msg.status, msg_raw, 1);
+          break;
+
+        case CID_SETTINGS_SET:
+          data_Beacon.set(CID_SETTINGS_SET);
+          std::memcpy(&data_Beacon.cid_sys_settings_set_msg.status, msg_raw, 1);
           break;
 
         case CID_PING_REQ:
@@ -605,6 +616,7 @@ namespace Transports
           message_build += String::toHex(msg_temp);
           break;
         }
+        
         case CID_SYS_REBOOT:
           message_build += String::str("%02X%02X",0x95,0x6A);
           break;
