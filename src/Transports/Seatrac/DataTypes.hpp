@@ -51,6 +51,8 @@ namespace Transports
     static const double c_acoustic_bitrate =  100;
     //! Message preamble
     static const char c_preamble = '$';
+    //! Command preamble
+    static const char c_cmd_preamble = '#';
     //! Maximum buffer size.
     static const int c_bfr_size = 256;
 
