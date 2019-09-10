@@ -19,19 +19,12 @@
 #include <Transports/Seatrac/Parser.hpp>
 
 using namespace std;
+using namespace Transports::Seatrac;
 
 // Socket definitions
 int sock_fd; 
 struct sockaddr_in servaddr; 
 int addrlen = sizeof(servaddr);
-
-/*** Helper functions ***/
-// Signal handler for SIGINT (keyboard interrupt CTRL+C)
-void sigint_handle(int sig){
-    cout << "Interrupted, closing TCP socket" << endl;
-    close(sock_fd);
-    exit(0);
-}
 
 // Connect to IP address through TCP socket
 int connect(const char *addr, int port, double timeout){
@@ -89,6 +82,55 @@ void printInstructions(){
     cout << "-------------------------------------------------------------------------------" << endl;    
 }
 
+/*** Helper functions ***/
+// Signal handler for SIGINT (keyboard interrupt CTRL+C)
+void sigint_handle(int sig){
+    Transports::Seatrac::DataSeatrac m_data_beacon;
+    cout << endl << "Caught SIGINT" << endl;
+    cout << "Requesting reboot from modem" << endl;
+    sendCommandTCP(Transports::Seatrac::CID_SYS_REBOOT, m_data_beacon);
+    cout << "Closing TCP socket" << endl;
+    close(sock_fd);
+    exit(0);
+}
+
+// Parse Seatrac sentence (from buffer) into string (partially copied from Seatrac task)
+// Returns length of 
+string m_data;
+string m_datahex;
+int readSentence(double timeout)
+{
+    char data[16] = {0};
+    int len = 0;
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    // Read from input buffer bit by bit, as the modem sends data in chunks
+    // A valid sentence is prefixed by $, and ends with \n\r
+    // We must keep reading data until a valid sentence is obtained
+    while(len < Transports::Seatrac::c_bfr_size){
+        int rv = read(sock_fd, data, 1);
+        if(data[0] == '\n') 
+            return len;
+        else {
+            if (data[0] == Transports::Seatrac::c_preamble){
+                m_data.clear();
+                clock_gettime(CLOCK_MONOTONIC, &end);
+            } else if (data[0] != '\r'){
+                m_data.push_back(*data);
+                clock_gettime(CLOCK_MONOTONIC, &end);
+                len++;
+            }
+        }
+        if((end.tv_sec - start.tv_sec) > timeout){
+            cout << "Timeout waiting for data" << endl;
+            break;
+        }
+    }
+
+    return 0;
+}
+
 /*** Main ***/
 int main(int argc, char **argv){
     // Seatrac data structure
@@ -116,56 +158,102 @@ int main(int argc, char **argv){
     }
     cout << "Connection established to " << argv[1] << ":" << argv[2] << endl; 
 
+    // Get current modem parameters
+    cout << "Attempting to obtain modem settings" << endl;
+    sendCommandTCP(Transports::Seatrac::CID_SETTINGS_GET, m_data_beacon);
+    if(readSentence(5.0) > 0){
+        // Get CRC from message
+        uint16_t crc, crc2;
+        string msg = DUNE::Utils::String::fromHex(m_data.substr((m_data.size() - 4), 4));
+        memcpy(&crc2, msg.data(), 2);
+        
+        // Calculate CRC locally
+        string m_datahex = DUNE::Utils::String::fromHex(m_data.erase((m_data.size() - 4), 4));
+        crc = DUNE::Algorithms::CRC16::compute((uint8_t*) m_datahex.data(), m_datahex.size(),0);
+        
+        // If CRC fails, drop the message (do nothing)
+        if (crc != crc2){
+            cerr << "Error obtaining settings: Invalid CRC" << endl;
+        }
+        else {
+            const char *msg_raw = m_datahex.data();
+            uint16_t typemes = 0;
+            memcpy(&typemes, msg_raw, 1);
+            Transports::Seatrac::DataSeatrac m_data_beacon;
+            dataParser(typemes, msg_raw + 1, m_data_beacon);
+            m_data.clear();
+            m_datahex.clear();
+            cout << "Got modem settings" << endl; 
+        }
+    }
+
     // Calibrate AHRS accelerometer
     cout << endl << "----------------------------------------------" << endl;
     cout <<         "| ***** AHRS accelerometer calibration ***** |" << endl;
     cout <<         "----------------------------------------------" << endl;
-    cout << " -> Please hold the Seatrac modem in an upright position, " << endl
-         << "as shown in page 138 of the user manual." << endl;
+    cout << " -> Please hold the Seatrac modem in a horizontal position, " << endl
+         << "as shown in page 20 of the user manual." << endl;
     cout << "[PRESS ENTER TO CONTINUE]" << endl;
     cin.ignore();
 
     // Send CID_SETTINGS_SET command to modem, with ACC_CAL and AHRS_RAW_DATA
-    m_data_beacon.cid_settings_msg.status_flags |= (1 << Transports::Seatrac::STATUS_MODE_10HZ);
-    m_data_beacon.cid_settings_msg.status_output |=
-        (~(1 << Transports::Seatrac::MAG_CAL_FLAG) | (1 << Transports::Seatrac::ACC_CAL_FLAG) | (1 << Transports::Seatrac::AHRS_RAW_DATA_FLAG));     // STATUSMODE_E = 10 Hz;    
+    m_data_beacon.cid_settings_msg.status_flags = Transports::Seatrac::STATUS_MODE_1HZ;
+    m_data_beacon.cid_settings_msg.status_output = (ENVIRONMENT_FLAG | ATTITUDE_FLAG | MAG_CAL_FLAG | ACC_CAL_FLAG
+                                                    | AHRS_RAW_DATA_FLAG | AHRS_COMP_DATA_FLAG);
     cout << " -> Sending CID_SETTINGS_SET command to modem" << endl;
     sendCommandTCP(Transports::Seatrac::CID_SETTINGS_SET, m_data_beacon);
     cout << " -> Done" << endl;
 
     // Send CID_CAL_ACTION command to modem
-    m_data_beacon.cid_cal_action.action |= (1 << Transports::Seatrac::CAL_ACC_RESET);
+    m_data_beacon.cid_cal_action.action = Transports::Seatrac::CAL_ACC_RESET;
     cout << " -> Sending CID_CAL_ACTION command to modem (CAL_ACC_RESET)" << endl;
     sendCommandTCP(Transports::Seatrac::CID_CAL_ACTION, m_data_beacon);
     cout << " -> Done" << endl;
 
     cout << endl << " -> Accelerometer calibration has started." << endl;
-    cout << " -> Please slowly start moving the beacon around the "
-         << "vertical position to find the maximum Z value." << endl;
-    cout << "    The emphasis should be on slow and gentle movements to "
-         << "avoid acceleration peaks from being detected." << endl;
-    cout << " -> You can observe the maximum Z value for calibration "
-         << "in the CID_STATUS message " << endl
-         << "    (e.g., using the seatrac_listener program)." << endl;
-    cout << " -> When done, press enter to continue." << endl;
+    cout << " -> Slowly start rotating the beacon clockwise and counter-clockwise " << endl
+         << "    around the Z axis (aligned with the beacon connector), to find the " << endl
+         << "    maximum and minimum X and Y values." << endl;
+    cout << " -> The emphasis should be on slow and gentle movements to avoid " << endl
+         << "    avoid acceleration peaks from being detected." << endl;
+    cout << " -> As the beacon is rotated you should notice that the X and Y min/max " << endl
+         << "    values start to approach their limits." << endl;
+    cout << " -> You can observe the minimum calibration values in the CID_STATUS " << endl
+         << "    message (e.g., using the seatrac_listener program)." << endl;
+    cout << " -> Once the X and Y limits have been found, press enter to continue." << endl;
     cout << "[PRESS ENTER TO CONTINUE]" << endl;
     cin.ignore();
 
-    cout << " -> Please hold the beacon horizontally and slowly rotate it " << endl
-         << "    clockwise and anti-clockwise to find the minimum and maximum " << endl
-         << "    values for the X and Y axis." << endl;
-    cout << " -> When done, press enter to continue." << endl;
+    cout << " -> Slowly put the beacon in an vertical (upright) position, " << endl
+         << "    and start to slowly oscillate the beacon through a few degrees, " << endl
+         << "    to either side, in all directions along the vertical axis, to find " << endl
+         << "    the minimum Z value." << endl;
+    cout << " -> Once the minimum Z value stabilizes, press enter to continue." << endl;
     cout << "[PRESS ENTER TO CONTINUE]" << endl;
     cin.ignore();
-    
-    m_data_beacon.cid_cal_action.action |= (1 << Transports::Seatrac::CAL_ACC_CALC);
+
+    cout << " -> To find the maximum Z value, invert the beacon in the vertical position " << endl
+         << "    (so gravity is acting on its connector end), and repeat the oscillatory " << endl
+         << "    movements above." << endl;
+    cout << " -> Once the maximum Z value stabilizes, press enter to continue." << endl;
+    cout << "[PRESS ENTER TO CONTINUE]" << endl;
+    cin.ignore();
+
+    m_data_beacon.cid_cal_action.action = Transports::Seatrac::CAL_ACC_CALC;
     cout << " -> Sending CID_CAL_ACTION command to modem (CAL_ACC_CALC)" << endl;
     sendCommandTCP(Transports::Seatrac::CID_CAL_ACTION, m_data_beacon);
     cout << " -> Done" << endl;
 
+    m_data_beacon.cid_settings_msg.status_flags = Transports::Seatrac::STATUS_MODE_1HZ;
+    m_data_beacon.cid_settings_msg.status_output = (ENVIRONMENT_FLAG | ATTITUDE_FLAG | MAG_CAL_FLAG | ACC_CAL_FLAG
+                                                    | AHRS_RAW_DATA_FLAG | AHRS_COMP_DATA_FLAG);
+    cout << " -> Sending CID_SETTINGS_SET command to modem" << endl;
+    sendCommandTCP(Transports::Seatrac::CID_SETTINGS_SET, m_data_beacon);
+    cout << " -> Done" << endl;
+
     char opt = 0x00;
-    cout << endl << " -> Would you like to save the calibration parameters in the beacon's " 
-        << "EEPROM memory? [y/n]" << endl;
+    cout << endl << " -> Would you like to save the accelerometer calibration " << endl
+                 << " parameters in the beacon's EEPROM memory? [y/n]" << endl;
     do{
         cin >> opt;
         switch (opt){
@@ -186,42 +274,50 @@ int main(int argc, char **argv){
     cout <<         "| ***** AHRS magnetometer calibration *****  |" << endl;
     cout <<         "----------------------------------------------" << endl;
     cout << " -> Please hold the Seatrac modem in an upright position, "
-         << "as shown in page 138 of the user manual." << endl;
+         << "as shown in page 21 of the user manual." << endl;
     cout << "[PRESS ENTER TO CONTINUE]" << endl;
     cin.ignore(); cin.ignore(); // Ugly, but it works...
 
     // Send CID_SETTINGS_SET command to modem, with MAG_CAL and AHRS_RAW_DATA
-    m_data_beacon.cid_settings_msg.status_flags |= (1 << Transports::Seatrac::STATUS_MODE_10HZ);
-    m_data_beacon.cid_settings_msg.status_output |=
-        ((1 << Transports::Seatrac::MAG_CAL_FLAG) | ~(1 << Transports::Seatrac::ACC_CAL_FLAG) | (1 << Transports::Seatrac::AHRS_RAW_DATA_FLAG));     // STATUSMODE_E = 10 Hz;    
+    m_data_beacon.cid_settings_msg.status_flags = Transports::Seatrac::STATUS_MODE_1HZ;
+    m_data_beacon.cid_settings_msg.status_output = (ENVIRONMENT_FLAG | ATTITUDE_FLAG | MAG_CAL_FLAG | ACC_CAL_FLAG
+                                                    | AHRS_RAW_DATA_FLAG | AHRS_COMP_DATA_FLAG);
     cout << " -> Sending CID_SETTINGS_SET command to modem" << endl;
     sendCommandTCP(Transports::Seatrac::CID_SETTINGS_SET, m_data_beacon);
     cout << " -> Done" << endl;
 
     // Send CID_CAL_ACTION command to modem
-    m_data_beacon.cid_cal_action.action |= (1 << Transports::Seatrac::CAL_MAG_RESET);
+    m_data_beacon.cid_cal_action.action = Transports::Seatrac::CAL_MAG_RESET;
     cout << " -> Sending CID_CAL_ACTION command to modem (CAL_MAG_RESET)" << endl;
     sendCommandTCP(Transports::Seatrac::CID_CAL_ACTION, m_data_beacon);
     cout << " -> Done" << endl;
 
     cout << endl << " -> Magnetometer calibration has started." << endl;
     cout << " -> Please start rotating the beacon around all 3-axis in 3D space." << endl;
-    cout << " -> As the beacon is rotated, the Pitch and Roll information is used to " << endl
+    cout << " -> As the beacon is rotated, the Pitch and Roll information are used to " << endl
          << "    build up a 3D magnetic map surrounding the beacon in the calibration buffer." << endl;
     cout << " -> You can observe the calibration progress in the in the CID_STATUS message" << endl
          << "    (e.g., using the seatrac_listener program)." << endl;
-    cout << " -> When done, press enter to continue." << endl;
+    cout << " -> Once the calibration procedure buffer reaches 100, press enter to continue." << endl;
     cout << "[PRESS ENTER TO CONTINUE]" << endl;
     cin.ignore();
-    
-    m_data_beacon.cid_cal_action.action |= (1 << Transports::Seatrac::CAL_MAG_CALC);
+
+    m_data_beacon.cid_cal_action.action = Transports::Seatrac::CAL_MAG_CALC;
     cout << " -> Sending CID_CAL_ACTION command to modem (CAL_MAG_CALC)" << endl;
     sendCommandTCP(Transports::Seatrac::CID_CAL_ACTION, m_data_beacon);
     cout << " -> Done" << endl;
+
+    // Send CID_SETTINGS_SET command to modem, with MAG_CAL and AHRS_RAW_DATA
+    m_data_beacon.cid_settings_msg.status_flags = Transports::Seatrac::STATUS_MODE_1HZ;
+    m_data_beacon.cid_settings_msg.status_output = (ENVIRONMENT_FLAG | ATTITUDE_FLAG | MAG_CAL_FLAG | ACC_CAL_FLAG
+                                                    | AHRS_RAW_DATA_FLAG | AHRS_COMP_DATA_FLAG);
+    cout << " -> Sending CID_SETTINGS_SET command to modem" << endl;
+    sendCommandTCP(Transports::Seatrac::CID_SETTINGS_SET, m_data_beacon);
+    cout << " -> Done" << endl;
     
     opt = 0x00;
-    cout << endl << " -> Would you like to save the calibration parameters in the beacon's " 
-        << "EEPROM memory? [y/n]" << endl;
+    cout << endl << " -> Would you like to save the magnetometer calibration " << endl
+                 << "    parameters in the beacon's EEPROM memory? [y/n]" << endl;
     do{
         cin >> opt;
         switch (opt){
