@@ -138,6 +138,16 @@ namespace Transports
       Firmware_t main_firmware;
     };
 
+    struct CidCalAction
+    {
+      uint8_t action;
+    };
+
+    struct CidCalActionMsg
+    {
+      uint8_t status;
+    };
+
     struct CidNavBeaconPosSendMsg
     {
       uint8_t beacon_id;
