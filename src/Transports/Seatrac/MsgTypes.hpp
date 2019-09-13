@@ -449,6 +449,11 @@ namespace Transports
       Acofix_t  aco_fix;
     };
 
+    struct CidSysReboot
+    {
+      uint16_t check;
+    };
+
     struct CidSysRebootMsg
     {
       uint8_t status;
