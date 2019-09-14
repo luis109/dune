@@ -170,6 +170,12 @@ namespace Simulators
          .defaultValue("SIM_EEPROM_MEM")
          .description("File name of simulated EEPROM file");
 
+        param("PRNG Type", m_args.prng_type)
+        .defaultValue(Random::Factory::c_default);
+
+        param("PRNG Seed", m_args.prng_seed)
+        .defaultValue("-1");
+
         bind<IMC::GpsFix>(this);
         bind<IMC::SimAcousticMessage>(this);
       }
