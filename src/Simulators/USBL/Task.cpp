@@ -127,7 +127,8 @@ namespace Simulators
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_sock(NULL)
+        m_sock(NULL),
+        m_prng(NULL)
       {
         param("Beacon ID", m_args.beacon_ID)
         .defaultValue("1")
