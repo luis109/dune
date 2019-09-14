@@ -553,7 +553,81 @@ namespace Simulators
       switch (cid_type)
       {
         case CID_STATUS:
-          // Status messages are automatically generated, so this will be sent 
+        {
+          // Status messages are automatically generated, so this will be sent periodically
+          std::vector<char> msg_temp(99, 0);
+          std::memcpy(&msg_temp[0], &data_Beacon.cid_status_msg.output_flags, 1);
+          std::memcpy(&msg_temp[1], &data_Beacon.cid_status_msg.timestamp, 8);
+
+          // Environment.
+          if (data_Beacon.cid_status_msg.outputflags_list[0])
+          {
+            std::memcpy(&msg_temp[9], &data_Beacon.cid_status_msg.environment_supply, 2);
+            std::memcpy(&msg_temp[11], &data_Beacon.cid_status_msg.environment_temperature, 2);
+            std::memcpy(&msg_temp[13], &data_Beacon.cid_status_msg.environment_pressure, 4);
+            std::memcpy(&msg_temp[19], &data_Beacon.cid_status_msg.EnvironmentDepth, 4);
+            std::memcpy(&msg_temp[21], &data_Beacon.cid_status_msg.EnvironmentVos, 2);
+          }
+
+          // Attitude.
+          if (data_Beacon.cid_status_msg.outputflags_list[1])
+          {
+            std::memcpy(&msg_temp[23], &data_Beacon.cid_status_msg.attitude_yaw, 2);
+            std::memcpy(&msg_temp[25], &data_Beacon.cid_status_msg.attitude_pitch, 2);
+            std::memcpy(&msg_temp[27], &data_Beacon.cid_status_msg.attitude_roll, 2);
+          }
+
+          // Mag cal.
+          if (data_Beacon.cid_status_msg.outputflags_list[2])
+          {
+            std::memcpy(&msg_temp[29], &data_Beacon.cid_status_msg.mag_cal_buf, 1);
+            std::memcpy(&msg_temp[30], &data_Beacon.cid_status_msg.mag_cal_valid, 1);
+            std::memcpy(&msg_temp[31], &data_Beacon.cid_status_msg.mag_cal_age, 4);
+            std::memcpy(&msg_temp[35], &data_Beacon.cid_status_msg.mag_cal_fit, 1);
+          }
+
+          // Acc cal.
+          if (data_Beacon.cid_status_msg.outputflags_list[3])
+          {
+            std::memcpy(&msg_temp[36], &data_Beacon.cid_status_msg.acc_lim_min_y, 2);
+            std::memcpy(&msg_temp[38], &data_Beacon.cid_status_msg.acc_lim_min_z, 2);
+            std::memcpy(&msg_temp[40], &data_Beacon.cid_status_msg.acc_lim_min_x, 2);
+            std::memcpy(&msg_temp[42], &data_Beacon.cid_status_msg.acc_lim_max_x, 2);
+            std::memcpy(&msg_temp[44], &data_Beacon.cid_status_msg.acc_lim_max_y, 2);
+            std::memcpy(&msg_temp[46], &data_Beacon.cid_status_msg.acc_lim_max_z, 2);
+          }
+
+          // AHRS raw data.
+          if (data_Beacon.cid_status_msg.outputflags_list[4])
+          {
+            std::memcpy(&msg_temp[48], &data_Beacon.cid_status_msg.ahrs_raw_acc_x, 2);
+            std::memcpy(&msg_temp[50], &data_Beacon.cid_status_msg.ahrs_raw_acc_y, 2);
+            std::memcpy(&msg_temp[52], &data_Beacon.cid_status_msg.ahrs_raw_acc_z, 2);
+            std::memcpy(&msg_temp[54], &data_Beacon.cid_status_msg.ahrs_raw_mag_x, 2);
+            std::memcpy(&msg_temp[56], &data_Beacon.cid_status_msg.ahrs_raw_mag_y, 2);
+            std::memcpy(&msg_temp[58], &data_Beacon.cid_status_msg.ahrs_raw_mag_z, 2);
+            std::memcpy(&msg_temp[60], &data_Beacon.cid_status_msg.ahrs_raw_gyro_x, 2);
+            std::memcpy(&msg_temp[62], &data_Beacon.cid_status_msg.ahrs_raw_gyro_y, 2);
+            std::memcpy(&msg_temp[64], &data_Beacon.cid_status_msg.ahrs_raw_gyro_z, 2);
+          }
+
+          // AHRS computed data.
+          if (data_Beacon.cid_status_msg.outputflags_list[5])
+          {
+            std::memcpy(&msg_temp[66], &data_Beacon.cid_status_msg.ahrs_comp_acc_x, 4);
+            std::memcpy(&msg_temp[70], &data_Beacon.cid_status_msg.ahrs_comp_acc_y, 4);
+            std::memcpy(&msg_temp[74], &data_Beacon.cid_status_msg.ahrs_comp_acc_z, 4);
+            std::memcpy(&msg_temp[78], &data_Beacon.cid_status_msg.ahrs_comp_mag_x, 4);
+            std::memcpy(&msg_temp[82], &data_Beacon.cid_status_msg.ahrs_comp_mag_y, 4);
+            std::memcpy(&msg_temp[86], &data_Beacon.cid_status_msg.ahrs_comp_mag_z, 4);
+            std::memcpy(&msg_temp[90], &data_Beacon.cid_status_msg.ahrs_comp_gyro_x, 4);
+            std::memcpy(&msg_temp[94], &data_Beacon.cid_status_msg.ahrs_comp_gyro_y, 4);
+            std::memcpy(&msg_temp[98], &data_Beacon.cid_status_msg.ahrs_comp_gyro_z, 4);
+          }
+          message_build += String::toHex(msg_temp);
+          break;
+        }
+
         case CID_PING_SEND:
           // When destination ID parameter is invalid or missing
           // NOTE: CST_CMD_PARAM_INVALID and CST_CMD_PARAM_MISSING have practically the same
