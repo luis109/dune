@@ -301,9 +301,9 @@ namespace Simulators
         // If sender is myself, ignore the message
         if (msg->getSource() != getSystemId())
           return;
-
-        std::string recvSentence = String::fromHex(msg->sentence);
-        inf("Received sentence: %s", recvSentence.c_str());
+        
+        std::string recv = String::str("%s", msg->sentence);
+        readSentence(recv.c_str(), recv.length());
       }
 
       //! Process sentence.
@@ -327,77 +327,112 @@ namespace Simulators
         return msg_validity;
       }
 
-      //! Read sentence.
-      void
-      readSentence(void)
+      // Process responses from client (mostly other beacons and simulators)
+      bool
+      processResponse()
       {
-        // Initialize received message parser
-        char bfr[Transports::Seatrac::c_bfr_size];
         uint16_t typemes = 0;
         const char* msg_raw;
         
-        // If there was a new event in the connection socket
-        if(m_poll.wasTriggered(*m_nc)){
-          // Catch connection and runtime errors
-          try
+        // CRC verification
+        if (processSentence())
+        {
+          msg_raw = m_datahex.data();
+          std::memcpy(&typemes, msg_raw, 1);
+          parseResponse(typemes, msg_raw + 1, m_data_beacon);
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+      }
+
+      bool
+      processCommand()
+      {
+        uint16_t typemes = 0;
+        const char* msg_raw;
+
+        // CRC verification
+        if (processSentence())
+        {
+          msg_raw = m_datahex.data();
+          std::memcpy(&typemes, msg_raw, 1);
+          parseCommand(typemes, msg_raw + 1, m_data_beacon);
+          // For now, do nothing. In the future, do something.
+          string response = responseCreateSeatrac(typemes, m_data_beacon);
+          dispatchToClients(response.c_str(), response.length());
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+        
+      }
+
+      //! Read sentence.
+      void
+      readSentence(const char *bfr, size_t rv)
+      {
+        for (size_t i = 0; i < rv; ++i)
+        {
+          // Detected line termination.
+          if (bfr[i] == '\n')
           {
-            size_t rv = m_nc->readString(bfr, Transports::Seatrac::c_bfr_size);
-            for (size_t i = 0; i < rv; ++i)
+            // If line read has a valid response preamble
+            if (m_pre_resp_detected)
             {
-              // Detected line termination.
-              if (bfr[i] == '\n')
-              {
-                // If line read has a valid preamble
-                if(m_pre_detected==true)
-                {
-                  // CRC verification
-                  if (processSentence())
-                  {
-                    msg_raw = m_datahex.data();
-                    std::memcpy(&typemes, msg_raw, 1);
-                    dataParser(typemes, msg_raw + 1, m_data_beacon);
-                    typemes = 0;
-                    inf("Received: %s", m_data.c_str());
-                  }
+              processResponse();
+              return;
+            }
+            else if (m_pre_cmd_detected)
+            {
+              processCommand();
+              return;
+            }              
                 }
-                m_pre_detected = false;
-                m_data.clear();
-              }
-              else
-              {
-                // TODO:
-                // For now we consider only incoming commands
-                // However, we must find out how modems communicate with each other
+            }              
+                }
+            }              
+                }
+            }              
+            m_pre_cmd_detected = false;
+            m_pre_resp_detected = false;
+            m_data.clear();
+          }
+          else
+          {
+            // TODO:
+            // For now we consider only incoming commands
+            // However, we must find out how modems communicate with each other
+            // Do they send commands in the same way? 
                 // Do they send commands in the same way? 
-                // Do they receive responses the same way?
-                if (bfr[i] == c_cmd_preamble)
-                {
-                  m_data.clear();
-                  m_pre_detected = true;
-                }
-                else if (bfr[i] != '\r')
-                {
-                  m_data.push_back(bfr[i]);
-                }
-              }
+            // Do they send commands in the same way? 
+                // Do they send commands in the same way? 
+            // Do they send commands in the same way? 
+                // Do they send commands in the same way? 
+            // Do they send commands in the same way? 
+                // Do they send commands in the same way? 
+            // Do they send commands in the same way? 
+            // Do they receive responses the same way?
+            // We assume yes to both questions
+            if (bfr[i] == c_preamble)
+            {
+              m_data.clear();
+              m_pre_resp_detected = true;
+            }
+            else if (bfr[i] == c_cmd_preamble)
+            {
+              m_data.clear();
+              m_pre_cmd_detected = true;
+            }
+            else if (bfr[i] != '\r')
+            {
+              m_data.push_back(bfr[i]);
             }
           }
-          catch (Network::ConnectionClosed& e)
-          {
-            // If connection was closed, delete client-side connection and exit procedure
-            war("Connection closed by client");
-            (void)e;
-            m_poll.remove(*m_nc);
-            delete m_nc;
-            m_nc = NULL;
-            return;
-          }
-          catch (std::runtime_error& e)
-          {
-            err("%s", e.what());
-          }
-
-          
         }
       }
 
@@ -524,7 +559,7 @@ namespace Simulators
             try
             {
               size_t rv = (*itr)->readString(bfr, Transports::Seatrac::c_bfr_size);
-              readSentence(bfr, rv);
+              readSentence((const char*)bfr, rv);
             }
             catch (Network::ConnectionClosed& e)
             {
