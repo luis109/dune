@@ -194,12 +194,14 @@ namespace Simulators
         try
         {
           m_sock = new TCPSocket;
-          m_nc = new TCPSocket;
         }
         catch (std::runtime_error& e)
         {
           throw RestartNeeded(e.what(), 30);
         }
+
+        // Random number generator
+        m_prng = Random::Factory::create(m_args.prng_type, m_args.prng_seed);
       }
 
       void
