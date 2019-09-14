@@ -374,6 +374,79 @@ namespace Simulators
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
       
+      //! Updates the beacon's status data, as if reading the sensors
+      // Is there a way to do this via threading? Is there a dune resource for threads?
+      // With a thread, the data could be updated without having to wait for the status rate,
+      // emulating the modem behavior a bit more realistically
+      void
+      updateStatus(void)
+      {
+        // Compute output flags
+        std::memcpy(&m_data_beacon.cid_status_msg.output_flags, &m_data_beacon.cid_settings_msg.status_output, 1);
+        m_data_beacon.cid_status_msg.outputFlagsComp();
+
+        // Simulate and calculate environmental parameters
+        // For now these values are fixed +- some variance to simulate sensor noise
+        // Supply voltage
+        double voltage = 15.0;  // 15 Volts
+        voltage += m_prng->gaussian(0, 0.01);
+        // Temperature
+        double temperature = 25.0;  // 25 Celsius
+        temperature += m_prng->gaussian(0, 0.1);
+        // Depth, user-defined
+        double depth = __builtin_bswap16(m_data_beacon.cid_status_msg.EnvironmentDepth) / 10.0; // + m_prng->gaussian(m_args.usbl_depth, 0.01);
+        // Pressure (user defines mounted depth and we calculate pressure from that)
+        double pressure = 0.101*depth + 1.01;  
+        // Water salinity (from beacon settings) - Parsed as little endian???
+        double salinity = __builtin_bswap16(m_data_beacon.cid_settings_msg.env_salinity) / 10.0;   // PPT
+        // Velocity-of-sound in sea-water (according to Mackenzie model, last element is basically zero)
+        // Depends on water depth, salinity and temperature
+        double vos = 1448.96 + 4.591*temperature - 0.05304*pow(temperature, 2) 
+                    + 0.002374*pow(temperature,3) + 1.340*(salinity-35) 
+                    + 0.0163010*depth + 0.0000001675*pow(depth,2) 
+                    - 0.01025*temperature*(salinity - 35);
+
+        // Get clock timestamp 
+        m_data_beacon.cid_status_msg.timestamp = DUNE::Time::Clock::getMsec();
+
+        // Environment.
+        // Milli-volts
+        m_data_beacon.cid_status_msg.environment_supply = (uint16_t)(voltage*1000);
+        // Deci-celsius
+        m_data_beacon.cid_status_msg.environment_temperature = (int16_t)(temperature*10);
+        // Milli-Bar
+        m_data_beacon.cid_status_msg.environment_pressure = (int32_t)(pressure*1000); 
+        // Deci-meters-per-second
+        m_data_beacon.cid_status_msg.EnvironmentVos = (uint16_t)(vos*10);
+
+        // Attitude - we calculate attitude based on range and displacement?
+        m_data_beacon.cid_status_msg.attitude_yaw += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.attitude_pitch += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.attitude_roll += m_prng->gaussian(0, 0.1);
+
+        // AHRS raw data.
+        m_data_beacon.cid_status_msg.ahrs_raw_acc_x += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_acc_y += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_acc_z += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_mag_x += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_mag_y += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_mag_z += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_gyro_x += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_gyro_y += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_raw_gyro_z += m_prng->gaussian(0, 0.1);
+        
+        // AHRS compensated data - How do we compensate it?
+        m_data_beacon.cid_status_msg.ahrs_comp_acc_x += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_acc_y += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_acc_z += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_mag_x += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_mag_y += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_mag_z += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_gyro_x += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_gyro_y += m_prng->gaussian(0, 0.1);
+        m_data_beacon.cid_status_msg.ahrs_comp_gyro_z += m_prng->gaussian(0, 0.1);
+      }
+      
       // From Transports.SerialOverTCP
       void
       checkMainSocket(void)
