@@ -461,9 +461,11 @@ namespace Transports
 
     struct CidNavQuerySendMsg
     {
+      uint8_t status;
       uint8_t dest_id;
       uint8_t query_flags;
-      uint8_t status;
+      uint8_t packet_len;
+      std::string packet_data; 
     };
 
     struct CidNavQuerryRespMsg
