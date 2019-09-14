@@ -122,8 +122,8 @@ namespace Simulators
       //! PRNG handle.
       Random::Generator* m_prng;
 
-      //! Current entity state.
-      IMC::EntityState m_state_entity;
+      //! TCP client list
+      std::list<TCPSocket*> m_clients;
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
