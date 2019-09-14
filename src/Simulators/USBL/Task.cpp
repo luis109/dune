@@ -270,10 +270,11 @@ namespace Simulators
           m_sock = NULL;
         }
 
-        if(m_nc != NULL){
-          m_poll.remove(*m_nc);
-          delete m_nc;
-          m_nc = NULL;
+        std::list<TCPSocket*>::iterator itr = m_clients.begin();
+        for (; itr != m_clients.end(); ++itr)
+        {
+          m_poll.remove(*(*itr));
+          delete *itr;
         }
       }
 
