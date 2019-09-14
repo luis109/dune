@@ -229,6 +229,34 @@ namespace Simulators
         inf("Reading beacon settings from simulated EEPROM");
         getSettingsEEPROM(m_args.sim_eeprom_file.c_str(), m_data_beacon);
 
+        // Select output mode based on STATUS_MODE_E flag
+        switch (m_data_beacon.cid_settings_msg.status_flags)
+        {
+          case Transports::Seatrac::STATUS_MODE_1HZ:
+                    m_status_rate = 1.0;
+                    break;
+          case Transports::Seatrac::STATUS_MODE_2HZ5:
+                    m_status_rate = 1/2.5;
+                    break;
+          case Transports::Seatrac::STATUS_MODE_5HZ:
+                    m_status_rate = 1/5.0;
+                    break;
+          case Transports::Seatrac::STATUS_MODE_10HZ:
+                    m_status_rate = 1/10.0;
+                    break;
+          case Transports::Seatrac::STATUS_MODE_25HZ:
+                    m_status_rate = 1/25.0;
+                    break;
+          default:  m_status_rate = 1.0;
+                    break;
+        }
+
+        // Set beacon structure latitude and longitude (in Seatrac they are encoded in milliseconds of arc angle)
+        m_data_beacon.cid_nav_ref_pos_update_msg.position_latitude = (int32_t)(m_args.usbl_lat * 3600000);
+        m_data_beacon.cid_nav_ref_pos_update_msg.position_longitude = (int32_t)(m_args.usbl_lon * 3600000);
+        // Set beacon depth according to mounted depth (in Seatrac it is encoded as deci-Meters)
+        m_data_beacon.cid_status_msg.EnvironmentDepth = (int32_t)(m_args.usbl_depth * 10);
+
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_WAIT_GPS_FIX);
       }
 
