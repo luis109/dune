@@ -274,6 +274,11 @@ namespace Transports
           std::memcpy(&data_Beacon.cid_cal_action_msg.status, msg_raw, 1);
           break;
 
+        case CID_SETTINGS_SET:
+          data_Beacon.set(CID_SETTINGS_SET);
+          std::memcpy(&data_Beacon.cid_sys_settings_set_msg.status, msg_raw, 1);
+          break;
+
         case CID_PING_REQ:
           data_Beacon.set(CID_PING_REQ);
           ind = updateEcoFix(&data_Beacon.cid_ping_req_msg.aco_fix, ind, msg_raw);
