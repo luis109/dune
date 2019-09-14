@@ -276,6 +276,8 @@ namespace Simulators
           m_poll.remove(*(*itr));
           delete *itr;
         }
+
+        Memory::clear(m_prng);
       }
 
       void
