@@ -545,6 +545,12 @@ namespace Transports
           message_build += data_Beacon.cid_dat_send_msg.packet_data;
           break;
 
+        case CID_CAL_ACTION:
+        {
+          message_build += String::str("%02X", (uint8_t)data_Beacon.cid_cal_action.action);
+          break;
+        }
+
         case CID_SETTINGS_SET:
         {
           std::vector<char> msg_temp(110, 0);
