@@ -115,7 +115,12 @@ namespace Simulators
       std::string m_datahex;
 
       //! c_preamble detected
-      bool m_pre_detected;
+      bool m_pre_cmd_detected;
+      bool m_pre_resp_detected;
+      //! Status output rate
+      double m_status_rate;
+      //! PRNG handle.
+      Random::Generator* m_prng;
 
       //! Current entity state.
       IMC::EntityState m_state_entity;
