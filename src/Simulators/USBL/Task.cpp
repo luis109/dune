@@ -532,12 +532,25 @@ namespace Simulators
 
         inf("Listening to port %d", m_sock_port);
         while(!stopping()){
-          if(m_poll.poll(5.0)){   // Wait for receiving in socket with 5 seconds timeout
-            checkMainSocket();
-            readSentence();
+
+          if(m_poll.poll(0.01)){
+            checkMainSocket();    // Expect connection
+            checkClientSockets(); // Receive data
           }
-          waitForMessages(0.1);
-        } 
+
+          // Get new "sensor" measurements
+          updateStatus();
+
+          // If there is a client, send current modem status to it
+          string status = responseCreateSeatrac(Transports::Seatrac::CID_STATUS, m_data_beacon);
+          dispatchToClients(status.c_str(), status.length());
+
+          // Get messages and wait status update rate
+          waitForMessages(0.01);
+          Delay::wait(m_status_rate);
+        }
+
+        onResourceRelease(); 
       }
     };
   }
