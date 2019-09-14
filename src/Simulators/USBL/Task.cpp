@@ -457,8 +457,60 @@ namespace Simulators
           inf(DTR("Accepting connection request"));
           try
           {
-            m_nc = m_sock->accept();
-            m_poll.add(*m_nc);
+            TCPSocket* nc = m_sock->accept();
+            m_clients.push_back(nc);
+            m_poll.add(*nc);
+          }
+          catch (std::runtime_error& e)
+          {
+            err("%s", e.what());
+          }
+        }
+      }
+
+      void
+      checkClientSockets(void)
+      {
+              
+        std::list<TCPSocket*>::iterator itr = m_clients.begin();
+        while (itr != m_clients.end())
+        {
+          if (m_poll.wasTriggered(*(*itr)))
+          {
+            char bfr[Transports::Seatrac::c_bfr_size];
+            try
+            {
+              size_t rv = (*itr)->readString(bfr, Transports::Seatrac::c_bfr_size);
+              readSentence(bfr, rv);
+            }
+            catch (Network::ConnectionClosed& e)
+            {
+              (void)e;
+              m_poll.remove(*(*itr));
+              delete *itr;
+              itr = m_clients.erase(itr);
+              continue;
+            }
+            catch (std::runtime_error& e)
+            {
+              err("%s", e.what());
+            }
+          }
+          ++itr;
+        }
+      }
+
+      // Send data back to clients (from Transports.SerialOverTCP)
+      void
+      dispatchToClients(const char* bfr, size_t bfr_len)
+      {
+        std::list<TCPSocket*>::iterator itr = m_clients.begin();
+        while (itr != m_clients.end())
+        {
+          try
+          {
+            (*itr)->write(bfr, bfr_len);
+            ++itr;
           }
           catch (std::runtime_error& e)
           {
