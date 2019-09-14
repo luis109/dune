@@ -515,6 +515,9 @@ namespace Simulators
           catch (std::runtime_error& e)
           {
             err("%s", e.what());
+            m_poll.remove(*(*itr));
+            delete *itr;
+            itr = m_clients.erase(itr);
           }
         }
       }
