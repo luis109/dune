@@ -629,6 +629,7 @@ namespace Simulators
         }
 
         case CID_PING_SEND:
+        {
           // When destination ID parameter is invalid or missing
           // NOTE: CST_CMD_PARAM_INVALID and CST_CMD_PARAM_MISSING have practically the same
           // logical effect
@@ -644,8 +645,10 @@ namespace Simulators
             message_build += String::str("%02X", Transports::Seatrac::CST_OK);
           }
           break;
+        }
 
         case CID_DAT_SEND:
+        {
           // When destination ID parameter is invalid or missing
           // NOTE: CST_CMD_PARAM_INVALID and CST_CMD_PARAM_MISSING have practically the same
           // logical effect
@@ -662,6 +665,7 @@ namespace Simulators
           }
           message_build += String::str("%02X", data_Beacon.beacon_ID);
           break;
+        }
         
         case CID_CAL_ACTION:
         {
@@ -679,14 +683,16 @@ namespace Simulators
         {
           // As we don't know what kind of checks the beacon performs on the settings,
           // we assume everything went fine
-          message_build += String::str("%02X", Transports::Seatrac::CST_OK);
+          message_build += String::str("%02X", CST_OK);
+          break;
+        }
 
           break;
         }
         
         case CID_SYS_REBOOT:
           // Check must be exactly 0x956A
-          if(data_Beacon.cid_sys_reboot.check != 0x956A){
+          if(data_Beacon.cid_sys_reboot.check != 0x6A95){
             message_build += String::str("%02X", Transports::Seatrac::CST_CMD_PARAM_INVALID);
           } else {
             // Check must be exactly 0x956A, or else it is invalid
