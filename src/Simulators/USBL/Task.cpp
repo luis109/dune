@@ -91,14 +91,10 @@ namespace Simulators
     {
       //! TCP socket handles
       TCPSocket* m_sock;
-      TCPSocket* m_nc;
-
       //! TCP socket port (parsed from uart_dev)
       unsigned m_sock_port;
-
       // I/O Multiplexer.
       Poll m_poll;
-
       //! Beacon data structure
       DataSeatrac m_data_beacon;
       //! Current position.
@@ -109,11 +105,9 @@ namespace Simulators
       double m_usbl_off_e;
       //! Task Arguments.
       Arguments m_args;
-
       //! Strings for data keeping
       std::string m_data;
       std::string m_datahex;
-
       //! c_preamble detected
       bool m_pre_cmd_detected;
       bool m_pre_resp_detected;
