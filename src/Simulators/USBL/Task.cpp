@@ -81,6 +81,10 @@ namespace Simulators
       double usbl_bearing_res;
       //! EEPROM file name
       std::string sim_eeprom_file;
+      //! PRNG type
+      std::string prng_type;
+      //! PRNG seed
+      int prng_seed;
     };
 
     struct Task: public DUNE::Tasks::Task
