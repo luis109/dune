@@ -73,6 +73,7 @@ namespace Navigation
 
           bind<IMC::LblConfig>(this);
           bind<IMC::UamRxRange>(this);
+          bind<IMC::UsblPositionExtended>(this);
         }
 
         //! Update internal state with new parameter values.
@@ -126,23 +127,55 @@ namespace Navigation
         {
           unsigned id = 0;
 
+          getBeacon(msg->sys, id);
+
+          IMC::LblRange range;
+          range.id = id;
+          range.range = msg->value;
+          dispatch(range);
+        }
+
+        void
+        consume(const IMC::UsblPositionExtended* msg)
+        {
+          unsigned dummy;
+          IMC::LblBeacon* beacon = getBeacon(msg->target, dummy);
+
+          if (beacon == NULL)
+            return;
+
+          double lat = beacon->lat;
+          double lon = beacon->lon;
+          double dep = beacon->depth;
+          WGS84::displace(-msg->n, -msg->e, -msg->d, &lat, &lon, &dep);
+
+          IMC::UsblFixExtended fix;
+          fix.target = getSystemName();
+          fix.lat = lat;
+          fix.lon = lon;
+          fix.z = dep;
+          fix.z_units = IMC::ZUnits::Z_DEPTH;
+          dispatch(fix);      
+        }
+
+        IMC::LblBeacon*
+        getBeacon(std::string name, unsigned &id)
+        {
+          id = 0;
+          
           MessageList<IMC::LblBeacon>::const_iterator itr = m_lbl_config.beacons.begin();
           for (; itr < m_lbl_config.beacons.end(); ++itr)
           {
             if ((*itr) == NULL)
               continue;
 
-            if ((*itr)->beacon == msg->sys)
-            {
-              IMC::LblRange range;
-              range.id = id;
-              range.range = msg->value;
-              dispatch(range);
-              return;
-            }
+            if ((*itr)->beacon == name)
+              return *itr;
 
             ++id;
           }
+
+          return NULL;
         }
 
         void
@@ -199,7 +232,7 @@ namespace Navigation
           while (!stopping())
           {
             wait();
-
+            
             if (!isActive())
               continue;
 
