@@ -198,7 +198,7 @@ namespace Simulators
       void
       consume(const IMC::UamTxFrame* msg)
       {
-        if (msg->getSource() != getSystemId())
+        if (msg->getDestination() != getSystemId())
           return;
 
         // Create and fill new ticket.
