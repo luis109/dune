@@ -104,6 +104,10 @@ namespace Simulators
         param("Modem Type", m_args.driver_args.modem_type)
         .description("Vehicle modem type (Ex. Evologics, Seatrac)");
 
+        param("Promiscuous Mode", m_args.driver_args.promiscuous)
+        .defaultValue("true")
+        .description("True if modem receives in promiscuous mode.");
+
         param("Transmission Speed", m_args.driver_args.tx_speed)
         .description("Modem transmission speed (bps)");
 
@@ -161,6 +165,7 @@ namespace Simulators
       {
         if (m_ticket != NULL)
         {
+          debug("Ticket %d cleared", m_ticket->seq);
           sendTxStatus(*m_ticket, reason, error);
           delete m_ticket;
           m_ticket = NULL;
@@ -176,6 +181,7 @@ namespace Simulators
         clearTicket(IMC::UamTxStatus::UTS_CANCELED);
         m_ticket = new Ticket(*ticket);
         m_timeout.setTop(c_timeout);
+        debug("Ticket %d created", m_ticket->seq);
       }
 
       //! Send status.
@@ -206,7 +212,7 @@ namespace Simulators
         ticket.imc_sid  = msg->getSource();
         ticket.imc_eid  = msg->getSourceEntity();
         ticket.seq      = msg->seq;
-        ticket.ack      = (msg->flags == IMC::UamTxFrame::UTF_ACK);
+        ticket.ack      = msg->flags == IMC::UamTxFrame::UTF_ACK;
 
         if (msg->sys_dst == getSystemName())
         {
@@ -255,11 +261,10 @@ namespace Simulators
           if (!m_ticket)
             return;
 
-          if (!m_ticket->ack)
+          if (m_ticket->ack)
             return;
           
           clearTicket(IMC::UamTxStatus::UTS_DONE);
-          debug("Ticket cleared!!!!");
         }
         else if (String::startsWith(msg->value, "FAILED"))
         {
