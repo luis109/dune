@@ -221,8 +221,7 @@ namespace DUNE
       m_use_declination = !m_ctx.profiles.isSelected("Simulation");
       m_declination_defined = false;
       m_dead_reckoning = false;
-      m_dead_reckoning_sync =false;
-      m_dead_reckoning_delta =false;
+      m_receive_delta =false;
       m_alt_sanity = true;
       m_aligned = false;
       m_edelta_ts = 0.1;
@@ -484,9 +483,9 @@ namespace DUNE
       if (msg->getSourceEntity() != m_imu_eid)
         return;
 
-      if(!m_dead_reckoning_sync)
+      if(!m_receive_delta)
         return;
-
+      
       if (std::fabs(msg->x) > Math::c_pi / 10.0 ||
           std::fabs(msg->y) > Math::c_pi / 10.0 ||
           std::fabs(msg->z) > Math::c_pi / 10.0)
@@ -495,8 +494,6 @@ namespace DUNE
             msg->x, msg->y, msg->z);
         return;
       }
-
-      m_dead_reckoning_delta = true;
 
       m_edelta_bfr[AXIS_X] += msg->x;
       m_edelta_bfr[AXIS_Y] += msg->y;
@@ -510,8 +507,9 @@ namespace DUNE
     BasicNavigation::consume(const IMC::GpsFix* msg)
     {
 
-      if (m_gps_disable== true)
+      if (m_gps_disable)
         return;
+        
       if (msg->type == IMC::GpsFix::GFT_MANUAL_INPUT)
         return;
 

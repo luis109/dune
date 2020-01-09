@@ -163,7 +163,7 @@ namespace Navigation
         //! Abort if navigation exceeds maximum uncertainty.
         bool abort;
         //! imu_ delay to sync data from imu
-        double imu_time_to_Sync;
+        double imu_sync_time;
         //! ahrs_time_update
         double ahrs_time_update;
         //! Activate RPM to m/s estimation
@@ -189,14 +189,14 @@ namespace Navigation
         Arguments m_args;
         //! Heading alignment buffer
         int m_heading_buffer;
-        //! IMU time synching flag.
-        bool m_synching_imu;
+        //! IMU delay counter
+        Delta m_imu_delay;
         //! Pointer to speed model for speed conversions
         const Plans::SpeedModel* m_speed_model;
-        //! IMU sync start time.
-        double m_last_imu;
         //! AHRS update period. 
         double m_last_ahrs;
+
+        Time::Delta time_gps_alignment;
 
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Navigation::BasicNavigation(name, ctx),
@@ -208,7 +208,7 @@ namespace Navigation
           .minimumValue("0.0")
           .description("Position process noise covariance value when IMU is available");
 
-          param("Delay to sync data from imu", m_args.imu_time_to_Sync)
+          param("Delay to sync data from imu", m_args.imu_sync_time)
           .defaultValue("10.0")
           .minimumValue("0.0")
           .description("Delay to sync data from imu");
@@ -228,7 +228,7 @@ namespace Navigation
           .size(6)
           .description("Kalman Filter process noise covariance values");
 
-          param("Heading Noise Covariance with IMU", m_observation_noise_imu)
+          param("Heading Noise Covariance with IMU", m_measurment_noise_imu)
           .defaultValue("")
           .size(2)
           .description("Heading Noise Covariance with IMU");
@@ -319,8 +319,6 @@ namespace Navigation
           m_kal.reset(NUM_STATE, NUM_OUT);
           resetKalman();
           m_heading_buffer=0;
-          m_synching_imu = false;
-          m_last_imu = 0.0;
 
           // Register callbacks
           bind<IMC::EntityActivationState>(this);
@@ -425,14 +423,14 @@ namespace Navigation
                msg->state == IMC::EntityActivationState::EAS_ACT_DONE))
           {
             // IMU already activated.
-            if (m_dead_reckoning_sync)
+            if (m_receive_delta)
               return;
-            m_dead_reckoning_sync = true;
-            m_synching_imu = false;
+
+            m_receive_delta = true;
           }
           else
           {
-            if (!m_dead_reckoning_sync)
+            if (!m_receive_delta)
               return;
 
             imuDeActivateDeadReckoning();
@@ -440,62 +438,77 @@ namespace Navigation
         }
 
         void
+        enableDeadReckoning()
+        {
+          if (m_dead_reckoning)
+            return;
+
+          if (!gotDeltaReadings())
+            return;
+
+          if (m_imu_delay.check() > m_args.imu_sync_time)
+          {
+            imuActivateDeadReckoning();
+            m_imu_delay.clear();
+          }
+        }
+
+        void
         imuActivateDeadReckoning(void)
         {
-            // Dead reckoning mode.
-            m_dead_reckoning = true;
-            debug("start navigation alignment");
-            m_last_ahrs =Time::Clock::get();
-            // Reinitialize state covariance matrix value.
-            m_kal.resetCovariance(STATE_PSI_BIAS);
-            m_kal.setCovariance(STATE_PSI_BIAS, m_state_cov[SC_BIASES]);
+          // Dead reckoning mode.
+          m_dead_reckoning = true;
+          debug("start navigation alignment");
+          m_last_ahrs =Time::Clock::get();
+          // Reinitialize state covariance matrix value.
+          m_kal.resetCovariance(STATE_PSI_BIAS);
+          m_kal.setCovariance(STATE_PSI_BIAS, m_state_cov[SC_BIASES]);
 
-            // Position process noise covariance value if IMU is available.
-            m_kal.setProcessNoise(STATE_X, m_args.pos_noise);
-            m_kal.setProcessNoise(STATE_Y, m_args.pos_noise);
+          // Position process noise covariance value if IMU is available.
+          m_kal.setProcessNoise(STATE_X, m_args.pos_noise);
+          m_kal.setProcessNoise(STATE_Y, m_args.pos_noise);
 
-            m_kal.setMeasurementNoise(STATE_PSI, m_observation_noise_imu[0] );
-            m_kal.setProcessNoise(STATE_PSI, 0.0);
-            m_kal.setProcessNoise(STATE_PSI_BIAS, m_process_noise[PN_PSI_BIAS]);
+          m_kal.setMeasurementNoise(OUT_PSI, m_measurment_noise_imu[0]);
+          m_kal.setProcessNoise(STATE_PSI, 0.0);
+          m_kal.setProcessNoise(STATE_PSI_BIAS, m_process_noise[PN_PSI_BIAS]);
 
-            m_kal.setMeasurementNoise(OUT_R, m_observation_noise_imu[1]);
-            m_kal.setProcessNoise(STATE_R, m_process_noise[PN_YAWRATE]);
+          m_kal.setMeasurementNoise(OUT_R, m_measurment_noise_imu[1]);
+          m_kal.setProcessNoise(STATE_R, m_process_noise[PN_YAWRATE]);
 
-            // LBL noise.
-            for (unsigned i = 0; i < m_ranging.getSize(); i++)
-              m_kal.setMeasurementNoise(NUM_OUT + i, m_args.lbl_noise);
+          // LBL noise.
+          for (unsigned i = 0; i < m_ranging.getSize(); i++)
+            m_kal.setMeasurementNoise(NUM_OUT + i, m_args.lbl_noise);
         }
 
         void
         imuDeActivateDeadReckoning(void)
         {
-            // Stop integrate heading rates and use AHRS data.
-            // Reset IMU sync flags
-            m_dead_reckoning_sync =false;
-            m_dead_reckoning_delta =false;
-            m_dead_reckoning = false;
-            m_aligned = false;
-            debug("navigation not aligned");
-            m_last_ahrs = -1;
+          // Stop integrate heading rates and use AHRS data.
+          // Reset IMU sync flags
+          m_receive_delta =false;
+          m_dead_reckoning = false;
+          m_aligned = false;
+          debug("navigation not aligned");
+          m_last_ahrs = -1;
 
-            // No heading offset estimation without IMU.
-            m_kal.setState(STATE_PSI_BIAS, 0.0);
-            m_kal.resetCovariance(STATE_PSI_BIAS);
+          // No heading offset estimation without IMU.
+          m_kal.setState(STATE_PSI_BIAS, 0.0);
+          m_kal.resetCovariance(STATE_PSI_BIAS);
 
-            // Reinitialize EKF variances.
-            m_kal.setProcessNoise(STATE_X, m_process_noise[PN_POSITION]);
-            m_kal.setProcessNoise(STATE_Y, m_process_noise[PN_POSITION]);
+          // Reinitialize EKF variances.
+          m_kal.setProcessNoise(STATE_X, m_process_noise[PN_POSITION]);
+          m_kal.setProcessNoise(STATE_Y, m_process_noise[PN_POSITION]);
 
-            m_kal.setMeasurementNoise(OUT_PSI, m_measure_noise[MN_PSI]);
-            m_kal.setProcessNoise(STATE_PSI, m_process_noise[PN_PSI]);
-            m_kal.setProcessNoise(STATE_PSI_BIAS, 0.0);
+          m_kal.setMeasurementNoise(OUT_PSI, m_measure_noise[MN_PSI]);
+          m_kal.setProcessNoise(STATE_PSI, m_process_noise[PN_PSI]);
+          m_kal.setProcessNoise(STATE_PSI_BIAS, 0.0);
 
-            m_kal.setMeasurementNoise(OUT_R, m_measure_noise[MN_YAWRATE]);
-            m_kal.setProcessNoise(STATE_R, m_process_noise[PN_YAWRATE]);
+          m_kal.setMeasurementNoise(OUT_R, m_measure_noise[MN_YAWRATE]);
+          m_kal.setProcessNoise(STATE_R, m_process_noise[PN_YAWRATE]);
 
-            // LBL noise.
-            for (unsigned i = 0; i < m_ranging.getSize(); i++)
-              m_kal.setMeasurementNoise(NUM_OUT + i, m_measure_noise[MN_LBL]);
+          // LBL noise.
+          for (unsigned i = 0; i < m_ranging.getSize(); i++)
+            m_kal.setMeasurementNoise(NUM_OUT + i, m_measure_noise[MN_LBL]);
         }
 
         bool
@@ -786,6 +799,9 @@ namespace Navigation
           logData();
           reportToBus();
 
+          // Check to enable dead reckoning
+          enableDeadReckoning();
+
           // Reset variables.
           updateBuffers(c_wma_filter);
           m_gps_reading = false;
@@ -793,30 +809,6 @@ namespace Navigation
           m_valid_gv = false;
           m_valid_wv = false;
           resetKalman();
-
-          double time_imu_delta = 0;
-
-          if (m_synching_imu)
-            time_imu_delta = Time::Clock::get() - m_last_imu;
-
-          if (m_dead_reckoning_sync   && 
-              m_dead_reckoning_delta  && 
-              !m_dead_reckoning       && 
-              !m_synching_imu)
-          {
-            m_last_imu =Time::Clock::get();
-            m_synching_imu = true;
-          }
-
-          if (m_synching_imu          && 
-              m_dead_reckoning_sync   && 
-              m_dead_reckoning_delta  && 
-              !m_dead_reckoning       && 
-              time_imu_delta > m_args.imu_time_to_Sync )
-          {
-            imuActivateDeadReckoning();
-            m_synching_imu=false;
-          }
         }
 
         void

@@ -320,6 +320,14 @@ namespace DUNE
         return m_angular_readings > c_wma_filter;
       }
 
+      //! Number of euler angles delta readings since last cycle plus constant filter gain.
+      //! @return true is received, false otherwise.
+      inline bool
+      gotDeltaReadings(void) const
+      {
+        return m_edelta_readings > c_wma_filter;
+      }
+
       //! Number of acceleration readings since last cycle plus constant filter gain.
       //! @return true is received, false otherwise.
       inline bool
@@ -528,7 +536,7 @@ namespace DUNE
       //! Kalman Filter process noise covariance matrix parameters.
       std::vector<double> m_process_noise;
       //! Kalman Filter observation noise covariance matrix parameters for imu with ahrs.
-      std::vector<double> m_observation_noise_imu;
+      std::vector<double> m_measurment_noise_imu;
       //! Kalman Filter measurement noise covariance matrix parameters.
       std::vector<double> m_measure_noise;
       //! Kalman Filter state covariance matrix parameters.
@@ -571,10 +579,8 @@ namespace DUNE
       double m_last_z;
       //! Dead reckoning mode.
       bool m_dead_reckoning;
-      //! Dead reckoning mode sync.
-      bool m_dead_reckoning_sync;
-      //! Dead reckoning  delta sync
-      bool m_dead_reckoning_delta;
+      //! Flat to receive IMU deltas.
+      bool m_receive_delta;
       //! Vehicle is aligned.
       bool m_aligned;
       //! IMU entity id.
@@ -591,6 +597,9 @@ namespace DUNE
       bool m_lbl_reading;
       //! Derivative for heave.
       Math::Derivative<double> m_deriv_heave;
+
+      //! GPS disable for debug
+      bool m_gps_disable;
 
     private:
       //! Routine to filter earth rotation effect from angular velocity values.
@@ -665,8 +674,6 @@ namespace DUNE
       float m_altitude;
       //! DVL entity label.
       std::string m_elabel_dvl;
-      //! GPS disable for debug
-      bool m_gps_disable;
       //! Altitude entity label hardware.
       std::string m_elabel_alt_hard;
       //! Altitude entity label simulation.
