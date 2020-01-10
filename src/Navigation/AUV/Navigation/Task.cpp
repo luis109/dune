@@ -196,8 +196,6 @@ namespace Navigation
         //! AHRS update period. 
         double m_last_ahrs;
 
-        Time::Delta time_gps_alignment;
-
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Navigation::BasicNavigation(name, ctx),
           m_avg_speed(NULL)
