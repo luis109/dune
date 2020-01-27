@@ -169,6 +169,9 @@ namespace DUNE
       bool
       exists(unsigned id)
       {
+        if (id > getSize())
+          return false;
+          
         return m_transponders[id] != NULL;
       }
 
