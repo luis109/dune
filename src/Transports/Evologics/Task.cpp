@@ -754,7 +754,8 @@ namespace Transports
       handleUsblPosition(const std::string& str)
       {
         RecvUsblPos reply;
-        m_driver->parseUsblPosition(str, reply);
+        m_driver->parseUsblPosition(str, reply,
+                                    m_ctx.profiles.isSelected("Simulation"));
 
         IMC::UsblPositionExtended up;
         up.target = safeLookup(reply.addr);
