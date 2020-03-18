@@ -359,11 +359,11 @@ namespace Navigation
           BasicNavigation::onEntityResolution();
           try
           {
-            m_imu_eid = resolveEntity(m_args.elabel_imu);
+            m_entity_id[DEV_IMU] = resolveEntity(m_entity_labels.back());
           }
           catch (...)
           {
-            m_imu_eid = std::numeric_limits<unsigned>::max();
+            m_entity_id[DEV_IMU] = std::numeric_limits<unsigned>::max();
           }
         }
 
@@ -378,7 +378,7 @@ namespace Navigation
             as.state = IMC::AlignmentState::AS_NOT_ALIGNED;
 
           // No IMU unit available.
-          if (m_imu_eid == std::numeric_limits<unsigned>::max())
+          if (m_entity_id[DEV_IMU] == std::numeric_limits<unsigned>::max())
             as.state = IMC::AlignmentState::AS_NOT_SUPPORTED;
 
           dispatch(as);
@@ -390,7 +390,7 @@ namespace Navigation
           if (msg->getSource() != getSystemId())
             return;
 
-          if (msg->getSourceEntity() != m_imu_eid)
+          if (msg->getSourceEntity() != m_entity_id[DEV_IMU])
             return;
 
           if ((msg->state == IMC::EntityActivationState::EAS_ACTIVE ||
@@ -525,7 +525,7 @@ namespace Navigation
         runKalmanUSBL(double x, double y)
         {
           // if there's gps, ignore usbl.
-          if (!m_time_without_gps.overflow())
+          if (!m_timer[TM_GPS].overflow())
             return;
 
           m_usbl_reading = true;
@@ -607,7 +607,7 @@ namespace Navigation
           {
             // Reset GPS counter.
             if (m_gps_reading)
-              m_time_without_gps.reset();
+              m_timer[TM_GPS].reset();
 
             m_kal.setInnovation(OUT_GPS_X, m_kal.getOutput(OUT_GPS_X) - m_kal.getState(STATE_X));
             m_kal.setInnovation(OUT_GPS_Y, m_kal.getOutput(OUT_GPS_Y) - m_kal.getState(STATE_Y));
@@ -625,7 +625,7 @@ namespace Navigation
             m_kal.setInnovation(OUT_U, m_kal.getOutput(OUT_U) - m_kal.getState(STATE_U));
             m_kal.setInnovation(OUT_V, m_kal.getOutput(OUT_V) - m_kal.getState(STATE_V));
           }
-          else if (m_time_without_gps.overflow() && m_time_without_dvl.overflow())
+          else if (m_timer[TM_GPS].overflow() && m_timer[TM_DVL].overflow())
           {
             double u = 0.0;
             double speed_m  = getRpmToMs(m_rpm);
@@ -649,9 +649,9 @@ namespace Navigation
           else
           {
             // Use GPS speed over ground.
-            if (m_gps_reading && m_time_without_dvl.overflow())
+            if (m_gps_reading && m_timer[TM_DVL].overflow())
             {
-              m_kal.setInnovation(OUT_U, m_gps_sog - m_kal.getState(STATE_U));
+              m_kal.setInnovation(OUT_U, get(QT_GPS_SOG) - m_kal.getState(STATE_U));
               m_kal.setInnovation(OUT_V, 0 - m_kal.getState(STATE_V));
             }
             else
@@ -775,7 +775,7 @@ namespace Navigation
 
           double yaw = m_kal.getState(STATE_PSI);
 
-          if (m_time_without_dvl.overflow() && m_time_without_gps.overflow())
+          if (m_timer[TM_DVL].overflow() && m_timer[TM_GPS].overflow())
           {
             A(STATE_X, STATE_K) = m_rpm * std::cos(yaw) * std::cos(theta);
             A(STATE_Y, STATE_K) = m_rpm * std::sin(yaw) * std::cos(theta);

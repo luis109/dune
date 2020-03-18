@@ -30,28 +30,11 @@
 #ifndef DUNE_NAVIGATION_BASIC_NAVIGATION_HPP_INCLUDED_
 #define DUNE_NAVIGATION_BASIC_NAVIGATION_HPP_INCLUDED_
 
-// ISO C++ 98 headers.
-#include <cmath>
-#include <limits>
-
 // DUNE headers.
-#include <DUNE/Coordinates/BodyFixedFrame.hpp>
-#include <DUNE/Coordinates/WGS84.hpp>
-#include <DUNE/Coordinates/WMM.hpp>
-#include <DUNE/IMC/Definitions.hpp>
-#include <DUNE/Memory.hpp>
-#include <DUNE/Math/Angles.hpp>
-#include <DUNE/Math/Derivative.hpp>
-#include <DUNE/Math/MovingAverage.hpp>
 #include <DUNE/Navigation/KalmanFilter.hpp>
 #include <DUNE/Navigation/Ranging.hpp>
 #include <DUNE/Navigation/StreamEstimator.hpp>
-#include <DUNE/Time/Clock.hpp>
-#include <DUNE/Time/Counter.hpp>
-#include <DUNE/Time/Delta.hpp>
-#include <DUNE/Tasks/Periodic.hpp>
-#include <DUNE/Tasks/Task.hpp>
-#include <DUNE/Utils/String.hpp>
+#include <DUNE/Navigation/Localization.hpp>
 
 namespace DUNE
 {
@@ -60,12 +43,12 @@ namespace DUNE
     // Export DLL Symbol.
     class DUNE_DLL_SYM BasicNavigation;
 
-    //! Weighted Moving Average filter value.
-    static const float c_wma_filter = 0.1f;
-    //! Maximum acceleration reading.
-    static const double c_max_accel = 30.0f;
-    //! Maximum angular velocity reading (5 times mathematical constant PI).
-    static const double c_max_agvel = 15.708f;
+    // //! Weighted Moving Average filter value.
+    // static const float c_wma_filter = 0.1f;
+    // //! Maximum acceleration reading.
+    // static const double c_max_accel = 30.0f;
+    // //! Maximum angular velocity reading (5 times mathematical constant PI).
+    // static const double c_max_agvel = 15.708f;
 
     //! Navigation task states.
     enum SMStates
@@ -89,17 +72,6 @@ namespace DUNE
       STATE_Y = 1
     };
 
-    //! Device axes.
-    enum Axes
-    {
-      //! X-axis.
-      AXIS_X = 0,
-      //! Y-axis.
-      AXIS_Y = 1,
-      //! Z-axis.
-      AXIS_Z = 2
-    };
-
     //! Abstract base class for navigation tasks.
     //!
     //! This task is responsible to gather data from sensors and compute an estimate of
@@ -116,7 +88,7 @@ namespace DUNE
     //!
     //! Some pre-filtering is done by rejecting GPS fixes and LBL ranges as well as
     //! applying a moving average filter to the altitude DVL measurements.
-    class BasicNavigation: public Tasks::Periodic
+    class BasicNavigation: public Navigation::Localization
     {
     public:
       //! Constructor.
@@ -206,7 +178,7 @@ namespace DUNE
       {
         if (!m_alt_sanity)
         {
-          if (m_dvl_sanity_timer.overflow())
+          if (m_timer[TM_SAN].overflow())
             m_altitude = -1.0;
           else
             m_altitude = 0.0;
@@ -214,7 +186,7 @@ namespace DUNE
           return m_altitude;
         }
 
-        if (m_time_without_alt.overflow())
+        if (m_timer[TM_ALT].overflow())
           m_altitude = -1.0;
 
         return m_altitude;
@@ -333,7 +305,7 @@ namespace DUNE
       inline unsigned
       getAhrsId(void) const
       {
-        return m_ahrs_eid;
+        return m_entity_id[DEV_AHRS];
       }
 
       //! Routine to compute LBL rejection value.
@@ -510,13 +482,6 @@ namespace DUNE
       void
       checkUncertainty(bool abort = true);
 
-      //! Routine to check current declination value using WMM.
-      //! @param[in] lat vehicle current latitude.
-      //! @param[in] lon vehicle current longitude.
-      //! @param[in] height vehicle current height.
-      void
-      checkDeclination(double lat, double lon, double height);
-
       //! Kalman Filter matrices.
       Navigation::KalmanFilter m_kal;
       //! Ranging data.
@@ -535,8 +500,6 @@ namespace DUNE
       IMC::EstimatedState m_estate;
       //! LBL range acceptance.
       IMC::LblRangeAcceptance m_lbl_ac;
-      //! GPS fix rejection.
-      IMC::GpsFixRejection m_gps_rej;
       //! DVL measurement rejection.
       IMC::DvlRejection m_dvl_rej;
       //! Navigation Uncertainty log.
@@ -547,30 +510,12 @@ namespace DUNE
       IMC::GroundVelocity m_gvel;
       //! Current velocity relative to the water message.
       IMC::WaterVelocity m_wvel;
-      //! Time without GPS sensor readings deadline.
-      Time::Counter<double> m_time_without_gps;
-      //! Time without DVL sensor readings deadline.
-      Time::Counter<double> m_time_without_dvl;
-      //! Time without altitude readings deadline.
-      Time::Counter<double> m_time_without_alt;
-      //! DVL data sanity timeout.
-      Time::Counter<double> m_dvl_sanity_timer;
-      //! Time without main depth provider.
-      Time::Counter<double> m_time_without_main_depth;
-      //! Time without depth readings.
-      Time::Counter<double> m_time_without_depth;
-      //! Time without euler angles readings.
-      Time::Counter<double> m_time_without_euler;
-      //! Valid GPS speed over ground.
-      double m_gps_sog;
       //! Vertical displacement in the NED frame to the origin height above ellipsoid
       double m_last_z;
       //! Dead reckoning mode.
       bool m_dead_reckoning;
       //! Vehicle is aligned.
       bool m_aligned;
-      //! IMU entity id.
-      unsigned m_imu_eid;
       //! LBL threshold.
       float m_lbl_threshold;
       //! Heading value (rad).
@@ -608,15 +553,6 @@ namespace DUNE
 
       //! True if this task is active.
       bool m_active;
-      //! Last latitude WGS-84.
-      double m_last_lat;
-      //! Last longitude WGS-84.
-      double m_last_lon;
-      //! Last GPS WGS-84 height above ellipsoid.
-      double m_last_hae;
-      //! Entity labels.
-      std::string m_elabel_ahrs;
-      std::string m_elabel_depth;
       //! Task state machine.
       SMStates m_navstate;
       //! Time step delta.
@@ -639,42 +575,16 @@ namespace DUNE
       bool m_depth_sensor;
       //! LBL rejection constants.
       std::vector<float> m_lbl_reject_constants;
-      //! Displacement between DVL and vehicle center of gravity.
-      float m_dist_dvl_cg;
-      //! Displacement between GPS and vehicle center of gravity.
-      float m_dist_gps_cg;
       //! Timestep between consecutive valid ground velocity messages.
       Time::Delta m_dvl_gv_tstep;
       //! Timestep between consecutive valid water velocity messages.
       Time::Delta m_dvl_wv_tstep;
-      //! Absolute maximum DVL thresholds.
-      std::vector<float> m_dvl_abs_thresh;
-      //! Relative DVL thresholds.
-      std::vector<float> m_dvl_rel_thresh;
-      //! Time window to check relative thresholds.
-      float m_dvl_time_rel_thresh;
       //! Altitude value.
       float m_altitude;
-      //! DVL entity label.
-      std::string m_elabel_dvl;
       //! GPS disable for debug
       bool m_gps_disable;
-      //! Altitude entity label hardware.
-      std::string m_elabel_alt_hard;
-      //! Altitude entity label simulation.
-      std::string m_elabel_alt_sim;
-      //! Altitude attitude compensation.
-      bool m_alt_attitude_compensation;
-      //! Altitude Exponential Moving Average filter gain.
-      float m_alt_ema_gain;
       //! Altitude data sanity;
       bool m_alt_sanity;
-      //! Maximum horizontal dilution of precision.
-      float m_max_hdop;
-      //! Maximum valid horizontal accuracy estimate.
-      float m_max_hacc;
-      //! Maximum HACC Moving Average factor.
-      float m_gps_hacc_factor;
       //! Sum of weights of sensor readings between prediction cycles.
       float m_depth_readings;
       float m_euler_readings;
@@ -698,26 +608,7 @@ namespace DUNE
       Math::MovingAverage<double>* m_avg_gps;
       //! Number of samples to average heave.
       unsigned m_avg_heave_samples;
-      //! Number of samples to average GPS.
-      unsigned m_avg_gps_samples;
-      //! Entity Ids.
-      unsigned m_depth_eid;
-      unsigned m_ahrs_eid;
-      unsigned m_alt_eid;
-      unsigned m_dvl_eid;
-      //! Declination value.
-      float m_declination;
-      //! Declination variables.
-      bool m_declination_defined;
-      bool m_use_declination;
-      //! Sensors timeout.
-      float m_without_gps_timeout;
-      float m_without_dvl_timeout;
-      float m_without_alt_timeout;
-      float m_without_main_depth_timeout;
-      float m_without_depth_timeout;
-      float m_without_euler_timeout;
-      float m_dvl_sanity_timeout;
+      // bool m_use_declination;
       //! DVL ground velocity validation bits.
       uint8_t m_gvel_val_bits;
       //! DVL water velocity validation bits.

@@ -290,7 +290,7 @@ namespace Navigation
           if (m_gps_reading)
           {
             // Reset GPS counter.
-            m_time_without_gps.reset();
+            m_timer[TM_GPS].reset();
             m_kal.setInnovation(OUT_GPS_X, m_kal.getOutput(OUT_GPS_X) - m_kal.getState(STATE_X));
             m_kal.setInnovation(OUT_GPS_Y, m_kal.getOutput(OUT_GPS_Y) - m_kal.getState(STATE_Y));
           }
@@ -310,9 +310,9 @@ namespace Navigation
           else
           {
             // Use GPS speed over ground.
-            if (m_gps_reading && m_time_without_dvl.overflow())
+            if (m_gps_reading && m_timer[TM_DVL].overflow())
             {
-              m_kal.setInnovation(OUT_U, m_gps_sog - m_kal.getState(STATE_U));
+              m_kal.setInnovation(OUT_U, get(QT_GPS_SOG) - m_kal.getState(STATE_U));
               m_kal.setInnovation(OUT_V, 0 - m_kal.getState(STATE_V));
             }
             else

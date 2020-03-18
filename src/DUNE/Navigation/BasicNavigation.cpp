@@ -46,7 +46,7 @@ namespace DUNE
     }
 
     BasicNavigation::BasicNavigation(const std::string& name, Tasks::Context& ctx):
-      Tasks::Periodic(name, ctx),
+      Navigation::Localization(name, ctx),
       m_active(false),
       m_origin(NULL),
       m_avg_heave(NULL),
@@ -79,63 +79,9 @@ namespace DUNE
       .defaultValue("false")
       .description("Disable GPS for debug");
 
-      param("GPS timeout", m_without_gps_timeout)
-      .units(Units::Second)
-      .defaultValue("3.0")
-      .minimumValue("1.5")
-      .description("No GPS readings timeout");
-
-      param("DVL timeout", m_without_dvl_timeout)
-      .units(Units::Second)
-      .defaultValue("1.0")
-      .minimumValue("1.0")
-      .description("No DVL readings timeout");
-
-      param("Altitude timeout", m_without_alt_timeout)
-      .units(Units::Second)
-      .defaultValue("5.0")
-      .minimumValue("3.0")
-      .description("No altitude readings timeout");
-
-      param("Euler timeout", m_without_euler_timeout)
-      .units(Units::Second)
-      .defaultValue("10.0")
-      .minimumValue("5.0")
-      .description("No EulerAngles readings timeout");
-
-      param("Depth timeout", m_without_depth_timeout)
-      .units(Units::Second)
-      .defaultValue("3.0")
-      .minimumValue("2.0")
-      .description("No Depth readings timeout");
-
-      param("Main Depth timeout", m_without_main_depth_timeout)
-      .units(Units::Second)
-      .defaultValue("1.0")
-      .minimumValue("0.5")
-      .description("No Depth readings from main provider timeout");
-
       param("Depth Sensor", m_depth_sensor)
       .defaultValue("true")
       .description("This variable signals that a depth sensor device is installed on system");
-
-      param("DVL sanity timeout", m_dvl_sanity_timeout)
-      .units(Units::Second)
-      .defaultValue("10.0")
-      .minimumValue("10.0")
-      .description("DVL sanity timeout");
-
-      param("Distance Between DVL and CG", m_dist_dvl_cg)
-      .units(Units::Meter)
-      .defaultValue("0.3")
-      .minimumValue("0.0")
-      .description("Distance between DVL and vehicle Center of Gravity");
-
-      param("Distance Between GPS and CG", m_dist_gps_cg)
-      .units(Units::Meter)
-      .defaultValue("0.28")
-      .minimumValue("0.0")
-      .description("Distance between GPS and vehicle Center of Gravity");
 
       param("Distance Between LBL and GPS", m_dist_lbl_gps)
       .units(Units::Meter)
@@ -143,83 +89,16 @@ namespace DUNE
       .minimumValue("0.0")
       .description("Distance between LBL receiver and GPS in the vehicle");
 
-      param("DVL absolute thresholds", m_dvl_abs_thresh)
-      .defaultValue("")
-      .size(2)
-      .description("DVL absolute thresholds");
-
-      param("DVL relative thresholds", m_dvl_rel_thresh)
-      .defaultValue("")
-      .size(2)
-      .description("DVL relative thresholds");
-
-      param("DVL relative threshold time window", m_dvl_time_rel_thresh)
-      .units(Units::Second)
-      .defaultValue("1.0")
-      .minimumValue("0.0")
-      .description("DVL relative threshold time window to be applied");
-
       param("LBL Threshold", m_lbl_threshold)
       .defaultValue("4.0")
       .minimumValue("2.0")
       .description("LBL Threshold value for the LBL level check rejection scheme");
-
-      param("GPS Maximum HDOP", m_max_hdop)
-      .defaultValue("5.0")
-      .minimumValue("3.0")
-      .maximumValue("10.0")
-      .description("Maximum Horizontal Dilution of Precision value accepted for GPS fixes");
-
-      param("GPS Maximum HACC", m_max_hacc)
-      .defaultValue("14.0")
-      .minimumValue("3.0")
-      .maximumValue("100.0")
-      .description("Maximum Horizontal Accuracy Estimate value accepted for GPS fixes");
-
-      param("GPS Maximum Dynamic HACC factor", m_gps_hacc_factor)
-      .defaultValue("2.0")
-      .minimumValue("1.5")
-      .maximumValue("10.0")
-      .description("Maximum Horizontal Accuracy Estimate Moving Average factor");
 
       param("Heave Moving Average Samples", m_avg_heave_samples)
       .defaultValue("40")
       .minimumValue("10")
       .description("Number of moving average samples to smooth heave");
 
-      param("GPS Moving Average Samples", m_avg_gps_samples)
-      .defaultValue("7")
-      .minimumValue("5")
-      .description("Number of moving average samples to smooth maximum GPS HACC.");
-
-      param("Entity Label - Depth", m_elabel_depth)
-      .defaultValue("Depth Sensor")
-      .description("Entity label of 'Depth' messages");
-
-      param("Entity Label - Compass", m_elabel_ahrs)
-      .defaultValue("AHRS")
-      .description("Entity label of 'AHRS' messages");
-
-      param("Entity Label - DVL", m_elabel_dvl)
-      .description("Entity label of the DVL device");
-
-      param("Entity Label - Altitude - Hardware", m_elabel_alt_hard)
-      .description("Entity label of the 'Distance' message for Hardware profile");
-
-      param("Entity Label - Altitude - Simulation", m_elabel_alt_sim)
-      .description("Entity label of the 'Distance' message for Simulation profile");
-
-      param("Altitude Attitude Compensation", m_alt_attitude_compensation)
-      .defaultValue("false")
-      .description("Enable or disable attitude compensation for altitude");
-
-      param("Altitude EMA gain", m_alt_ema_gain)
-      .defaultValue("1.0")
-      .description("Exponential moving average filter gain used in altitude");
-
-      // Do not use the declination offset when simulating.
-      m_use_declination = !m_ctx.profiles.isSelected("Simulation");
-      m_declination_defined = false;
       m_dead_reckoning = false;
       m_alt_sanity = true;
       m_aligned = false;
@@ -259,15 +138,6 @@ namespace DUNE
     void
     BasicNavigation::onUpdateParameters(void)
     {
-      // Initialize timers.
-      m_time_without_gps.setTop(m_without_gps_timeout);
-      m_time_without_dvl.setTop(m_without_dvl_timeout);
-      m_time_without_alt.setTop(m_without_alt_timeout);
-      m_time_without_main_depth.setTop(m_without_main_depth_timeout);
-      m_time_without_depth.setTop(m_without_depth_timeout);
-      m_time_without_euler.setTop(m_without_euler_timeout);
-      m_dvl_sanity_timer.setTop(m_dvl_sanity_timeout);
-
       // Distance DVL to vehicle Center of Gravity is 0 in Simulation.
       if (m_ctx.profiles.isSelected("Simulation"))
       {
@@ -279,53 +149,15 @@ namespace DUNE
     void
     BasicNavigation::onResourceInitialization(void)
     {
+      Localization::onResourceInitialization();
       m_avg_heave = new Math::MovingAverage<double>(m_avg_heave_samples);
-      m_avg_gps = new Math::MovingAverage<double>(m_avg_gps_samples);
       reset();
     }
 
     void
     BasicNavigation::onEntityResolution(void)
-    {
-      // Resolve entities.
-      try
-      {
-        m_depth_eid = resolveEntity(m_elabel_depth);
-      }
-      catch (...)
-      {
-        m_depth_eid = std::numeric_limits<unsigned>::max();
-      }
-
-      try
-      {
-        m_ahrs_eid = resolveEntity(m_elabel_ahrs);
-      }
-      catch (...)
-      {
-        m_ahrs_eid = std::numeric_limits<unsigned>::max();
-      }
-
-      try
-      {
-        m_dvl_eid = resolveEntity(m_elabel_dvl);
-      }
-      catch (...)
-      {
-        m_dvl_eid = std::numeric_limits<unsigned>::max();
-      }
-
-      try
-      {
-        if (m_ctx.profiles.isSelected("Simulation"))
-          m_alt_eid = resolveEntity(m_elabel_alt_sim);
-        else
-          m_alt_eid = resolveEntity(m_elabel_alt_hard);
-      }
-      catch (...)
-      {
-        m_alt_eid = std::numeric_limits<unsigned>::max();
-      }
+    { 
+      Localization::onEntityResolution();
     }
 
     void
@@ -339,7 +171,7 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::Acceleration* msg)
     {
-      if (msg->getSourceEntity() != m_ahrs_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
         return;
 
       if (std::fabs(msg->x) > c_max_accel ||
@@ -361,7 +193,7 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::AngularVelocity* msg)
     {
-      if (msg->getSourceEntity() != m_ahrs_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
         return;
 
       if (std::fabs(msg->x) > c_max_agvel ||
@@ -383,21 +215,21 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::Depth* msg)
     {
-      if (msg->getSourceEntity() != m_depth_eid && !m_time_without_main_depth.overflow())
+      if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH] && !m_timer[TM_MAIN_DEPTH].overflow())
         return;
 
-      if (msg->getSourceEntity() == m_depth_eid)
-        m_time_without_main_depth.reset();
+      if (msg->getSourceEntity() == m_entity_id[DEV_DEPTH])
+        m_timer[TM_MAIN_DEPTH].reset();
 
       m_depth_bfr += msg->value + m_depth_offset;
       ++m_depth_readings;
-      m_time_without_depth.reset();
+      m_timer[TM_DEPTH].reset();
     }
 
     void
     BasicNavigation::consume(const IMC::DepthOffset* msg)
     {
-      if (msg->getSourceEntity() != m_depth_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH])
         return;
 
       m_depth_offset = msg->value;
@@ -406,12 +238,12 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::DataSanity* msg)
     {
-      if (msg->getSourceEntity() != m_dvl_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_DVL])
         return;
 
       if (msg->sane == IMC::DataSanity::DS_NOT_SANE)
       {
-        m_dvl_sanity_timer.reset();
+        m_timer[TM_SAN].reset();
         m_alt_sanity = false;
       }
       else
@@ -423,14 +255,14 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::Distance* msg)
     {
-      if (msg->getSourceEntity() != m_alt_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_ALT])
         return;
 
       if (msg->validity == IMC::Distance::DV_INVALID)
         return;
 
       // Reset altitude timer.
-      m_time_without_alt.reset();
+      m_timer[TM_ALT].reset();
 
       if (!m_alt_sanity)
         return;
@@ -451,7 +283,7 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::EulerAngles* msg)
     {
-      if (msg->getSourceEntity() != m_ahrs_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
         return;
 
       if (std::fabs(msg->phi) > Math::c_pi ||
@@ -473,13 +305,13 @@ namespace DUNE
       if (m_declination_defined && m_use_declination)
         m_euler_bfr[AXIS_Z] += m_declination;
 
-      m_time_without_euler.reset();
+      m_timer[TM_EULER].reset();
     }
 
     void
     BasicNavigation::consume(const IMC::EulerAnglesDelta* msg)
     {
-      if (msg->getSourceEntity() != m_imu_eid)
+      if (msg->getSourceEntity() != m_entity_id[DEV_IMU])
         return;
 
       if (std::fabs(msg->x) > Math::c_pi / 10.0 ||
@@ -502,70 +334,26 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::GpsFix* msg)
     {
-
-      if (m_gps_disable== true)
+      if (m_gps_disable == true)
         return;
+
       if (msg->type == IMC::GpsFix::GFT_MANUAL_INPUT)
         return;
 
-      // GpsFix validation.
-      m_gps_rej.utc_time = msg->utc_time;
-      m_gps_rej.setTimeStamp(msg->getTimeStamp());
-
-      // Check fix validity.
-      if ((msg->validity & IMC::GpsFix::GFV_VALID_POS) == 0)
+      Localization::consume(msg);
+      
+      if (m_gps_rej.reason == std::numeric_limits<uint8_t>::max())
       {
-        m_gps_rej.reason = IMC::GpsFixRejection::RR_INVALID;
-        dispatch(m_gps_rej, DF_KEEP_TIME);
-        return;
-      }
-
-      double max_hacc = m_avg_gps->mean();
-
-      m_avg_gps->update(msg->hacc);
-
-      if (m_avg_gps->sampleSize() > 2 && msg->hacc > m_gps_hacc_factor * max_hacc)
-      {
-        m_gps_rej.reason = IMC::GpsFixRejection::RR_ABOVE_THRESHOLD;
-        dispatch(m_gps_rej, DF_KEEP_TIME);
-        return;
-      }
-
-      // Check if we have valid Horizontal Accuracy index.
-      if (msg->validity & IMC::GpsFix::GFV_VALID_HACC)
-      {
-        // Update GPS measurement noise parameters.
-        updateKalmanGpsParameters(msg->hacc);
-
-        // Check if it is above Maximum Horizontal Accuracy.
-        if (msg->hacc > m_max_hacc)
-        {
-          m_gps_rej.reason = IMC::GpsFixRejection::RR_ABOVE_MAX_HACC;
-          dispatch(m_gps_rej, DF_KEEP_TIME);
-          return;
-        }
+        if (msg->validity & IMC::GpsFix::GFV_VALID_HACC)
+          updateKalmanGpsParameters(get(QT_GPS_HACC));
       }
       else
       {
-        // Horizontal Dilution of Precision.
-        if (msg->hdop > m_max_hdop)
-        {
-          m_gps_rej.reason = IMC::GpsFixRejection::RR_ABOVE_MAX_HDOP;
-          dispatch(m_gps_rej, DF_KEEP_TIME);
-          return;
-        }
+        if (m_gps_rej.reason == IMC::GpsFixRejection::RR_ABOVE_MAX_HACC)
+          updateKalmanGpsParameters(get(QT_GPS_HACC));
+        
+        return;
       }
-
-      // Speed over ground.
-      if (msg->validity & IMC::GpsFix::GFV_VALID_SOG)
-        m_gps_sog = msg->sog;
-
-      // Check current declination value.
-      checkDeclination(msg->lat, msg->lon, msg->height);
-
-      m_last_lat = msg->lat;
-      m_last_lon = msg->lon;
-      m_last_hae = msg->height;
 
       // Start navigation if filter not active.
       if (!m_active)
@@ -680,7 +468,7 @@ namespace DUNE
         return;
       }
 
-      m_time_without_dvl.reset();
+      m_timer[TM_DVL].reset();
       m_valid_gv = true;
 
       // Store accepted msg.
@@ -728,7 +516,7 @@ namespace DUNE
       }
 
       // Reject LBL ranges when GPS is available.
-      if (!m_time_without_gps.overflow())
+      if (!m_timer[TM_GPS].overflow())
       {
         m_lbl_ac.acceptance = IMC::LblRangeAcceptance::RR_AT_SURFACE;
         dispatch(m_lbl_ac, DF_KEEP_TIME);
@@ -830,7 +618,7 @@ namespace DUNE
         return;
       }
 
-      m_time_without_dvl.reset();
+      m_timer[TM_DVL].reset();
       m_valid_wv = true;
 
       // Store accepted msg.
@@ -858,12 +646,8 @@ namespace DUNE
     void
     BasicNavigation::reset(void)
     {
-      m_last_lat = 0.0;
-      m_last_lon = 0.0;
-      m_last_hae = 0.0;
       m_last_z = 0.0;
 
-      m_gps_sog = 0.0;
       m_heading = 0.0;
       m_altitude = -1;
 
@@ -907,8 +691,7 @@ namespace DUNE
     void
     BasicNavigation::updateKalmanGpsParameters(double hacc)
     {
-      // do nothing.
-      (void)hacc;
+      (void) hacc;
     }
 
     void
@@ -1023,9 +806,9 @@ namespace DUNE
       if (gotEulerReadings())
       {
         IMC::EstimatedState estate;
-        estate.lat = m_last_lat;
-        estate.lon = m_last_lon;
-        estate.height = m_last_hae;
+        estate.lat = get(QT_GPS_GEO, GEO_LAT);
+        estate.lon = get(QT_GPS_GEO, GEO_LON);
+        estate.height = get(QT_GPS_GEO, GEO_HEI);
         estate.phi = Math::Angles::normalizeRadian(getEuler(AXIS_X));
         estate.theta = Math::Angles::normalizeRadian(getEuler(AXIS_Y));
         estate.psi = Math::Angles::normalizeRadian(getEuler(AXIS_Z));
@@ -1164,13 +947,13 @@ namespace DUNE
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
             break;
           case SM_STATE_NORMAL:
-            if (m_depth_sensor && m_time_without_depth.overflow())
+            if (m_depth_sensor && m_timer[TM_DEPTH].overflow())
             {
               setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("no measurements available: %s"), DTR("Depth")));
               return;
             }
 
-            if (m_time_without_euler.overflow())
+            if (m_timer[TM_EULER].overflow())
             {
               setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("no measurements available: %s"), DTR("Euler Angles")));
               return;
@@ -1200,19 +983,6 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::checkDeclination(double lat, double lon, double height)
-    {
-      if (!m_declination_defined && m_use_declination)
-      {
-        // Compute declination value
-        // -- note: this is done only once, thus the short-lived wmm object
-        Coordinates::WMM wmm(m_ctx.dir_cfg);
-        m_declination = wmm.declination(lat, lon, height);
-        m_declination_defined = true;
-      }
-    }
-
-    void
     BasicNavigation::extractEarthRotation(double& p, double& q, double& r)
     {
       // Insert euler angles into row matrix.
@@ -1223,9 +993,9 @@ namespace DUNE
 
       // Earth rotation vector.
       Math::Matrix we(3,1);
-      we(0) = Math::c_earth_rotation * std::cos(m_last_lat);
+      we(0) = Math::c_earth_rotation * std::cos(get(QT_GPS_GEO, GEO_LAT));
       we(1) = 0.0;
-      we(2) = - Math::c_earth_rotation * std::sin(m_last_lat);
+      we(2) = - Math::c_earth_rotation * std::sin(get(QT_GPS_GEO, GEO_LAT));
 
       // Sensed angular velocities due to Earth rotation effect.
       Math::Matrix av(3,1);

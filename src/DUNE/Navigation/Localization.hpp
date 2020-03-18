@@ -30,24 +30,54 @@
 #ifndef DUNE_NAVIGATION_LOCALIZATION_HPP_INCLUDED_
 #define DUNE_NAVIGATION_LOCALIZATION_HPP_INCLUDED_
 
-#include <DUNE/DUNE.hpp>
+// ISO C++ 98 headers.
+#include <cmath>
+#include <limits>
+
+// DUNE headers.
+#include <DUNE/Coordinates/BodyFixedFrame.hpp>
+#include <DUNE/Coordinates/WGS84.hpp>
+#include <DUNE/Coordinates/WMM.hpp>
+#include <DUNE/IMC/Definitions.hpp>
+#include <DUNE/Memory.hpp>
+#include <DUNE/Math/Angles.hpp>
+#include <DUNE/Math/Derivative.hpp>
+#include <DUNE/Math/MovingAverage.hpp>
+#include <DUNE/Time/Clock.hpp>
+#include <DUNE/Time/Counter.hpp>
+#include <DUNE/Time/Delta.hpp>
+#include <DUNE/Tasks/Periodic.hpp>
+#include <DUNE/Tasks/Task.hpp>
+#include <DUNE/Utils/String.hpp>
 
 namespace DUNE
 {
   namespace Navigation
   {
-    //! Weighted Moving Average filter value.
+    // Export DLL Symbol.
+    class DUNE_DLL_SYM Localization;
+
+    //! Weighted Moving Average filter value
     static const float c_wma_filter = 0.1f;
+    //! Maximum acceleration reading
+    static const float c_max_accel = 30.0f;
+    //! Maximum acceleration reading
+    static const float c_max_agvel = Math::c_pi*5.0;
+    //! Maximum euler angles
+    static const float c_max_euler = Math::c_pi;
+    //! Maximum euler angles delta 
+    static const float c_max_edelta = Math::c_pi/10.0;
 
     //! Simple weighted moving average for specific use case
     //! Allows WMA in multiple values
     //! TODO: Derive from moving average class
-    template<unsigned N>
+    template<size_t N>
     class WMAFilter
     {
     public:
-      WMAFilter(const float a_weight):
-      m_weight(a_weight)
+      WMAFilter(const float weight, std::array<double, N>& arr):
+      m_value(arr),
+      m_weight(weight)
       {
         reset();
       }
@@ -61,37 +91,22 @@ namespace DUNE
       }
 
       //! Adds one, multi-value, reading
-      WMAFilter<N>&
-      operator+=(const std::array<double, N>& arr)
+      void
+      add(const std::array<double, N>& arr)
       {
         if (arr.size() != N)
           throw;
 
-        for (unsigned i = 0; i < N; ++i)
-          m_value[i] += arr[i];
+        for (size_t i = 0; i < N; ++i)
+          m_value[i] = (m_value[i]*m_readings + arr[i])/(m_readings + 1);
 
         ++m_readings;
-
-        return *this;
-      }
-
-      //! Returns the average in the specified index
-      double
-      operator[](const unsigned index)
-      {
-        if (index >= N)
-          throw;
-
-        return m_readings ? (m_value[index]/m_readings) : 0.0;
       }
 
       //! Update
       void
       update()
       {
-        for (unsigned i = 0; i < N; ++i)
-            m_value[i] =  (*this)[i] * m_weight;
-
         m_readings = m_weight;
       }
 
@@ -108,102 +123,222 @@ namespace DUNE
       }
 
     private:
-      std::array<double, N> m_value;
+      std::array<double, N>& m_value;
       float m_weight;
       float m_readings;
     };
 
-      struct Arguments
-      {
-        //! Position process noise when tactical grade IMU is enabled.
-        float pos_noise;
-        //! LBL measurement noise when tactical grade IMU enabled.
-        float lbl_noise;
-        //! GPS measurement noise covariance values.
-        std::vector<double> gps_noise;
-        //! USBL measurement noise covariance value.
-        double usbl_noise;
-        //! IMU entity label.
-        std::string elabel_imu;
-        //! Number of samples to average forward speed.
-        unsigned navg_speed;
-        //! Revolutions to speed factor.
-        float rpm_ini;
-        //! Maximum revolutions to speed variation.
-        float rpm_max;
-        //! Heading bias uncertainty alignment threshold.
-        double alignment_index;
-        //! Heading alignment sensor diff threshold
-        double alignment_diff;
-        //! Diff threshold - buffer of values for threshold validation
-        double heading_buffer_value;
-        //! Abort if navigation exceeds maximum uncertainty.
-        bool abort;
-        //! Activate RPM to m/s estimation
-        bool rpm_estimation;
-        //!  Activate RPM to m/s % limit on estimation
-        bool speed_relation_Limit;
-        //!  Value RPM to m/s limit on estimation
-        double speed_relation_limit_value;
-        //!  Distance of Depth sensor to the veicle pitch rotation axis 
-        float distance_depth_sensor;
-      };
-
-    class Localization
+    //! Device axes.
+    enum Axes
     {
-    public:
-      Localization():
-      m_acceleration(WMAFilter<3>(c_wma_filter)),
-      m_ang_velocity(WMAFilter<3>(c_wma_filter)),
-      m_euler(WMAFilter<3>(c_wma_filter)),
-      m_euler_delta(WMAFilter<3>(c_wma_filter)),
-      m_depth(WMAFilter<1>(c_wma_filter))
-      {
-        reset();
-      }
+      //! X-axis.
+      AXIS_X = 0,
+      //! Y-axis.
+      AXIS_Y = 1,
+      //! Z-axis.
+      AXIS_Z = 2
+    };
 
-      ~Localization() = default;
+    enum Geo
+    {
+      //! Lat.
+      GEO_LAT = 0,
+      //! Lon.
+      GEO_LON = 1,
+      //! Height.
+      GEO_HEI = 2
+    };
+
+    enum Quantity
+    {
+      QT_DEPTH = 0,
+      QT_ACCELERATION,
+      QT_ANGULAR_VELOCITY,
+      QT_EULER_ANGLES,
+      QT_DEULER_ANGLES,
+      QT_ALTITUDE,
+      QT_DEPTH_OFFSET,
+      QT_RPM,
+      QT_GPS_POS,
+      QT_GPS_GEO,
+      QT_GPS_SOG,
+      QT_GPS_HACC,
+      QT_USBL,
+      QT_GR_VELOCITY,
+      QT_WT_VELOCITY,
+      QT_SANITY,
+      NUM_QUANT
+    };
+
+    enum Devices
+    {
+      DEV_AHRS = 0,
+      DEV_DEPTH,
+      DEV_DVL,
+      DEV_ALT,
+      DEV_IMU,
+      NUM_DEV
+    };
+
+    enum Timers
+    {
+      TM_GPS = 0,
+      TM_DVL,
+      TM_ALT,
+      TM_SAN,
+      TM_MAIN_DEPTH,
+      TM_DEPTH,
+      TM_EULER,
+      TM_EDELTA,
+      NUM_TIMER
+    };
+
+    struct Data
+    {
+      //! Localization information
+      std::array<double, 3> accel;
+      std::array<double, 3> agvel;
+      std::array<double, 3> euler;
+      std::array<double, 3> edelta;
+      double edelta_ts;
+
+      std::array<double, 1> depth;
+      double depth_offset;
+
+      double altitude;
+      double rpm;
+
+      // GPS
+      std::array<double, 3> gps_pos;
+      std::array<double, 3> gps_geo;
+      double gps_sog;
+      double gps_hacc;
+      double gps_hdop;
+
+      std::array<double, 6> usbl;
+      std::array<double, 2> gvel;
+      std::array<double, 2> wvel;
 
       void
       reset()
       {
-        m_acceleration.reset();
-        m_ang_velocity.reset();
-        m_euler.reset();
-        m_euler_delta.reset();
-        m_depth.reset();
+        accel.fill(0.0);
+        agvel.fill(0.0);
+        euler.fill(0.0);
+        edelta.fill(0.0);
+        depth.fill(0.0);
 
-        m_edelta_ts = 0.0;
-        m_depth_offset = 0.0;
-        m_altitude = -1.0;
-        m_rpm = 0.0;
-        m_gps_hacc = 0.0;
+        edelta_ts = 0.0;
+        depth_offset = 0.0;
+        altitude = -1.0;
+        rpm = 0.0;
 
-        m_gps = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-        m_usbl = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        gps_pos.fill(0.0);
+        gps_geo.fill(0.0);
+        gps_sog = 0.0;
+        gps_hacc = 0.0;
+        gps_hdop = 0.0;
+        usbl.fill(0.0);
 
-        m_gnd_velocity = {0.0, 0.0};
-        m_wtr_velocity = {0.0, 0.0};
+        gvel.fill(0.0);
+        wvel.fill(0.0);
       }
+    };
 
-      WMAFilter<3> m_acceleration;
-      WMAFilter<3> m_ang_velocity;
-      WMAFilter<3> m_euler;
-      WMAFilter<3> m_euler_delta;
-      double m_edelta_ts;
+    class Localization: public Tasks::Periodic
+    {
+    public:
+      
+      Localization(const std::string& name, Tasks::Context& ctx);
 
-      WMAFilter<1> m_depth;
-      double m_depth_offset;
+      ~Localization() = default;
 
-      double m_altitude;
-      double m_rpm;
+      //! Initialize resources.
+      virtual void
+      onResourceInitialization(void);
 
-      std::array<double, 6> m_gps;
-      double m_gps_hacc;
+      //! Resolve entities.
+      virtual void
+      onEntityResolution();
 
-      std::array<double, 6> m_usbl;
-      std::array<double, 2> m_gnd_velocity;
-      std::array<double, 2> m_wtr_velocity;
+      double
+      get(unsigned quant, unsigned ax = 0);
+
+      virtual void
+      consume(const IMC::GpsFix* msg);
+
+      //! Routine to check current declination value using WMM.
+      //! @param[in] lat vehicle current latitude.
+      //! @param[in] lon vehicle current longitude.
+      //! @param[in] height vehicle current height.
+      void
+      checkDeclination(double lat, double lon, double height);
+
+    protected:
+      //! Arguments
+      //! Entity labels of localization devices
+      std::vector<std::string> m_entity_labels;
+      //! Entity label of altitude device in simulation
+      std::string m_elabel_alt_sim;
+      //! Entity id's of localization devices
+      unsigned m_entity_id[NUM_DEV];
+      //! Flag for attitude compensation in altitude readings
+      bool m_alt_attitude_compensation;
+      //! Flag for declination correction in AHRS readings
+      bool m_use_declination;
+      //! Exponential moving average filter gain used in altitude
+      float m_alt_ema_gain;
+      //! Distance between GPS and vehicle Center of Gravity
+      float m_dist_gps_cg;
+      //! Distance between DVL and vehicle Center of Gravity
+      float m_dist_dvl_cg;
+      //! DVL relative threshold time window to be applied
+      float m_dvl_time_rel_thresh;
+      //! DVL readings absolute thresholds
+      std::vector<float> m_dvl_abs_thresh;
+      //! DVL readings relative thresholds
+      std::vector<float> m_dvl_rel_thresh;
+      //! Device timeouts
+      std::vector<float> m_time_thresh;      
+      //! Number of samples to average GPS.
+      unsigned m_avg_gps_samples;
+
+      //! Timers
+      Time::Counter<double> m_timer[NUM_TIMER];
+      //! Declination value.
+      float m_declination;
+      //! Flag for declination defined
+      bool m_declination_defined;
+
+      //! GPS
+      //! GPS rejection message
+      IMC::GpsFixRejection m_gps_rej;
+      //! Moving Average for GpsFix.
+      Math::MovingAverage<double>* m_avg_gps;
+      //! Maximum HACC Moving Average factor.
+      float m_gps_hacc_factor;
+      //! Maximum horizontal dilution of precision.
+      float m_max_hdop;
+      //! Maximum valid horizontal accuracy estimate.
+      float m_max_hacc;
+
+      //Return from func
+      bool m_return;
+      //Update kalman
+      bool m_update_kalman;
+
+    private:
+      //! Data
+      Data m_data;
+      //! Altitutde sanity
+      bool m_sane;
+      //! Data read write lock
+      Concurrency::RWLock m_data_lock;
+      //! Filters
+      WMAFilter<3> m_accel_filter;
+      WMAFilter<3> m_agvel_filter;
+      WMAFilter<1> m_depth_filter;
+      WMAFilter<3> m_euler_filter;
     };
   }
 }
