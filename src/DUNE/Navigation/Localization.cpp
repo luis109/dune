@@ -120,8 +120,11 @@ namespace DUNE
       m_declination_defined = false;
       
       reset();
+      m_sane = true;
 
       bind<IMC::Acceleration>(this);
+      bind<IMC::AngularVelocity>(this);
+      bind<IMC::DataSanity>(this);
       bind<IMC::EulerAngles>(this);
       bind<IMC::GpsFix>(this);
     }
@@ -133,8 +136,6 @@ namespace DUNE
       for (size_t i = 0; i < NUM_TIMER - 1; ++i)
         m_timer[i].setTop(m_time_thresh[i]);
 
-      m_return = false;
-      m_update_kalman = false;
       m_avg_gps = new Math::MovingAverage<double>(m_avg_gps_samples);
     }
 
@@ -186,6 +187,43 @@ namespace DUNE
 
       Concurrency::ScopedRWLock(m_data_lock, true);
       m_accel_filter.add({msg->x, msg->y, msg->z});
+    }
+
+    void
+    Localization::consume(const IMC::AngularVelocity* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
+        return;
+
+      if (std::fabs(msg->x) > c_max_agvel ||
+          std::fabs(msg->y) > c_max_agvel ||
+          std::fabs(msg->z) > c_max_agvel)
+      {
+        war(DTR("received angular velocity beyond range: %f, %f, %f"),
+            msg->x, msg->y, msg->z);
+
+        return;
+      }
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_agvel_filter.add({msg->x, msg->y, msg->z});
+    }
+
+    void
+    Localization::consume(const IMC::DataSanity* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_DVL])
+        return;
+
+      if (msg->sane == IMC::DataSanity::DS_NOT_SANE)
+      {
+        m_timer[TM_SAN].reset();
+        m_sane = false;
+      }
+      else
+      {
+        m_sane = true;
+      }
     }
 
     void

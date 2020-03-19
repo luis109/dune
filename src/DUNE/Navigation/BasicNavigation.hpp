@@ -110,12 +110,6 @@ namespace DUNE
       onResourceRelease(void);
 
       void
-      consume(const IMC::AngularVelocity* msg);
-
-      void
-      consume(const IMC::DataSanity* msg);
-
-      void
       consume(const IMC::Distance* msg);
 
       void
@@ -163,7 +157,7 @@ namespace DUNE
       inline double
       getAltitude(void)
       {
-        if (!m_alt_sanity)
+        if (!m_sane)
         {
           if (m_timer[TM_SAN].overflow())
             m_altitude = -1.0;
@@ -177,14 +171,6 @@ namespace DUNE
           m_altitude = -1.0;
 
         return m_altitude;
-      }
-
-      //! Get angular velocity value along a specific axis.
-      //! @return angular velocity value.
-      inline double
-      getAngularVelocity(unsigned axis) const
-      {
-        return m_angular_readings ? (m_agvel_bfr[axis] / m_angular_readings) : 0.0;
       }
 
       //! Get heading rate value.
@@ -213,9 +199,9 @@ namespace DUNE
         }
         else
         {
-          p = getAngularVelocity(AXIS_X);
-          q = getAngularVelocity(AXIS_Y);
-          r = getAngularVelocity(AXIS_Z);
+          p = get(QT_AGVEL, AXIS_X);
+          q = get(QT_AGVEL, AXIS_Y);
+          r = get(QT_AGVEL, AXIS_Z);
         }
 
         extractEarthRotation(p, q, r);
@@ -245,14 +231,6 @@ namespace DUNE
       gotDepthReadings(void) const
       {
         return m_depth_readings > c_wma_filter;
-      }
-
-      //! Number of angular velocity readings since last cycle plus constant filter gain.
-      //! @return true is received, false otherwise.
-      inline bool
-      gotAngularReadings(void) const
-      {
-        return m_angular_readings > c_wma_filter;
       }
 
       //! Get AHRS Entity Id.
@@ -297,17 +275,6 @@ namespace DUNE
           m_edelta_bfr[i] =  getEulerDelta(i) * filter;
 
         m_edelta_readings = filter;
-      }
-
-      //! Routine to clear angular velocities buffer.
-      //! @param[in] filter filter value.
-      inline void
-      updateAngularVelocities(float filter)
-      {
-        for (unsigned i = 0; i < 3; ++i)
-          m_agvel_bfr[i] =  getAngularVelocity(i) * filter;
-
-        m_angular_readings = filter;
       }
 
       //! Routine to clear depth buffer.
@@ -389,10 +356,6 @@ namespace DUNE
       //! @param[in] filter sensor filters gain.
       void
       updateBuffers(float filter);
-
-      //! Routine to reset angular velocity buffers.
-      void
-      resetAngularVelocity(void);
 
       //! Routine to reset depth buffers.
       void
@@ -508,15 +471,11 @@ namespace DUNE
       float m_altitude;
       //! GPS disable for debug
       bool m_gps_disable;
-      //! Altitude data sanity;
-      bool m_alt_sanity;
       //! Sum of weights of sensor readings between prediction cycles.
       float m_depth_readings;
       float m_edelta_readings;
-      float m_angular_readings;
       //! "Buffers" for sensors readings.
       double m_depth_bfr;
-      double m_agvel_bfr[3];
       //! Euler Angles Delta.
       double m_edelta_bfr[3];
       //! Euler Angles Delta timestep.

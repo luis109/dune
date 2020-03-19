@@ -100,7 +100,6 @@ namespace DUNE
       .description("Number of moving average samples to smooth heave");
 
       m_dead_reckoning = false;
-      m_alt_sanity = true;
       m_aligned = false;
       m_edelta_ts = 0.1;
       m_rpm = 0;
@@ -115,8 +114,6 @@ namespace DUNE
                         | IMC::WaterVelocity::VAL_VEL_Z;
 
       // Register callbacks.
-      bind<IMC::AngularVelocity>(this);
-      bind<IMC::DataSanity>(this);
       bind<IMC::Depth>(this);
       bind<IMC::DepthOffset>(this);
       bind<IMC::Distance>(this);
@@ -166,28 +163,6 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::consume(const IMC::AngularVelocity* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
-        return;
-
-      if (std::fabs(msg->x) > c_max_agvel ||
-          std::fabs(msg->y) > c_max_agvel ||
-          std::fabs(msg->z) > c_max_agvel)
-      {
-        war(DTR("received angular velocity beyond range: %f, %f, %f"),
-            msg->x, msg->y, msg->z);
-
-        return;
-      }
-
-      m_agvel_bfr[AXIS_X] += msg->x;
-      m_agvel_bfr[AXIS_Y] += msg->y;
-      m_agvel_bfr[AXIS_Z] += msg->z;
-      ++m_angular_readings;
-    }
-
-    void
     BasicNavigation::consume(const IMC::Depth* msg)
     {
       if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH] && !m_timer[TM_MAIN_DEPTH].overflow())
@@ -211,23 +186,6 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::consume(const IMC::DataSanity* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_DVL])
-        return;
-
-      if (msg->sane == IMC::DataSanity::DS_NOT_SANE)
-      {
-        m_timer[TM_SAN].reset();
-        m_alt_sanity = false;
-      }
-      else
-      {
-        m_alt_sanity = true;
-      }
-    }
-
-    void
     BasicNavigation::consume(const IMC::Distance* msg)
     {
       if (msg->getSourceEntity() != m_entity_id[DEV_ALT])
@@ -239,7 +197,7 @@ namespace DUNE
       // Reset altitude timer.
       m_timer[TM_ALT].reset();
 
-      if (!m_alt_sanity)
+      if (!m_sane)
         return;
 
       float value = msg->value;
@@ -362,7 +320,7 @@ namespace DUNE
     {
       m_gvel = *msg;
       // Correct for the distance between center of gravity and dvl.
-      m_gvel.y = msg->y - m_dist_dvl_cg * getAngularVelocity(AXIS_Z);
+      m_gvel.y = msg->y - m_dist_dvl_cg * get(QT_AGVEL, AXIS_Z);
 
       if (msg->validity != m_gvel_val_bits)
         return;
@@ -512,7 +470,7 @@ namespace DUNE
     {
       m_wvel = *msg;
       // Correct for the distance between center of gravity and dvl.
-      m_wvel.y = msg->y - m_dist_dvl_cg * getAngularVelocity(AXIS_Z);
+      m_wvel.y = msg->y - m_dist_dvl_cg * get(QT_AGVEL, AXIS_Z);
 
       if (msg->validity != m_wvel_val_bits)
         return;
@@ -728,8 +686,8 @@ namespace DUNE
       m_estate.z = m_last_z + getDepth();
       m_estate.phi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
       m_estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
-      m_estate.p = getAngularVelocity(AXIS_X);
-      m_estate.q = getAngularVelocity(AXIS_Y);
+      m_estate.p = get(QT_AGVEL, AXIS_X);
+      m_estate.q = get(QT_AGVEL, AXIS_Y);
       m_estate.alt = getAltitude();
       m_estate.depth = getDepth();
       m_estate.w = m_avg_heave->update(m_deriv_heave.update(m_estate.depth));
@@ -765,12 +723,12 @@ namespace DUNE
         updateFilter(QT_EULER);
         updateDepth(c_wma_filter);
 
-        if (gotAngularReadings())
+        if (got(QT_AGVEL))
         {
-          m_estate.p = getAngularVelocity(AXIS_X);
-          m_estate.q = getAngularVelocity(AXIS_Y);
-          m_estate.r = getAngularVelocity(AXIS_Z);
-          updateAngularVelocities(c_wma_filter);
+          m_estate.p = get(QT_AGVEL, AXIS_X);
+          m_estate.q = get(QT_AGVEL, AXIS_Y);
+          m_estate.r = get(QT_AGVEL, AXIS_Z);
+          updateFilter(QT_AGVEL);
         }
 
         dispatch(estate);
@@ -796,20 +754,10 @@ namespace DUNE
     BasicNavigation::updateBuffers(float filter)
     {
       // Reinitialize buffers.
-      updateAngularVelocities(filter);
       updateDepth(filter);
       updateEulerDelta(filter);
 
       updateAll();
-    }
-
-    void
-    BasicNavigation::resetAngularVelocity(void)
-    {
-      m_agvel_bfr[AXIS_X] = 0.0;
-      m_agvel_bfr[AXIS_Y] = 0.0;
-      m_agvel_bfr[AXIS_Z] = 0.0;
-      m_angular_readings = 0.0;
     }
 
     void
@@ -832,7 +780,6 @@ namespace DUNE
     void
     BasicNavigation::resetBuffers(void)
     {
-      resetAngularVelocity();
       resetDepth();
       resetEulerAnglesDelta();
 

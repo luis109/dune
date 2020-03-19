@@ -240,7 +240,7 @@ namespace Navigation
         logData(void)
         {
           m_estate.psi = Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
-          m_estate.r = Angles::normalizeRadian(getAngularVelocity(AXIS_Z));
+          m_estate.r = Angles::normalizeRadian(get(QT_AGVEL, AXIS_Z));
           onDispatchNavigation();
 
           m_estate.u = m_kal.getState(STATE_U);

@@ -167,7 +167,6 @@ namespace DUNE
       QT_USBL,
       QT_GRVEL,
       QT_WTVEL,
-      QT_SANITY,
       NUM_QUANT
     };
 
@@ -271,7 +270,13 @@ namespace DUNE
 
       virtual void
       consume(const IMC::Acceleration* msg);
-      
+
+      virtual void
+      consume(const IMC::AngularVelocity* msg);
+
+      void
+      consume(const IMC::DataSanity* msg);
+
       virtual void
       consume(const IMC::EulerAngles* msg);
 
@@ -351,16 +356,12 @@ namespace DUNE
       //! Maximum valid horizontal accuracy estimate.
       float m_max_hacc;
 
-      //Return from func
-      bool m_return;
-      //Update kalman
-      bool m_update_kalman;
+      //! Altitutde sanity
+      bool m_sane;
 
     private:
       //! Data
       Data m_data;
-      //! Altitutde sanity
-      bool m_sane;
       //! Data read write lock
       Concurrency::RWLock m_data_lock;
       //! Filters
