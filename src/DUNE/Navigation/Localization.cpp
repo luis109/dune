@@ -121,6 +121,7 @@ namespace DUNE
       
       reset();
 
+      bind<IMC::Acceleration>(this);
       bind<IMC::EulerAngles>(this);
       bind<IMC::GpsFix>(this);
     }
@@ -165,6 +166,53 @@ namespace DUNE
     Localization::onResourceRelease()
     {
       Memory::clear(m_avg_gps);
+    }
+
+    void
+    Localization::consume(const IMC::Acceleration* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
+        return;
+
+      if (std::fabs(msg->x) > c_max_accel ||
+          std::fabs(msg->y) > c_max_accel ||
+          std::fabs(msg->z) > c_max_accel)
+      {
+        err(DTR("received acceleration beyond range: %f, %f, %f"),
+            msg->x, msg->y, msg->z);
+
+        return;
+      }
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_accel_filter.add({msg->x, msg->y, msg->z});
+    }
+
+    void
+    Localization::consume(const IMC::EulerAngles* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
+        return;
+
+      if (std::fabs(msg->phi) > Math::c_pi ||
+          std::fabs(msg->theta) > Math::c_pi ||
+          std::fabs(msg->psi) > Math::c_pi)
+      {
+        war(DTR("received euler angles beyond range: %f, %f, %f"),
+            msg->phi, msg->theta, msg->psi);
+        return;
+      }
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      // Heading buffer maintains sign.
+      double psi;
+      psi = m_data.euler[AXIS_Z] + Math::Angles::minSignedAngle(m_data.euler[AXIS_Z], msg->psi);
+
+      if (m_declination_defined && m_use_declination)
+        psi += m_declination;
+
+      m_euler_filter.add({msg->phi, msg->theta, psi});
+      m_timer[TM_EULER].reset();
     }
 
     void
@@ -230,33 +278,6 @@ namespace DUNE
       m_data.gps.geo[GEO_LAT] = msg->lat;
       m_data.gps.geo[GEO_LON] = msg->lon;
       m_data.gps.geo[GEO_HEI] = msg->height;
-    }
-
-    void
-    Localization::consume(const IMC::EulerAngles* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
-        return;
-
-      if (std::fabs(msg->phi) > Math::c_pi ||
-          std::fabs(msg->theta) > Math::c_pi ||
-          std::fabs(msg->psi) > Math::c_pi)
-      {
-        war(DTR("received euler angles beyond range: %f, %f, %f"),
-            msg->phi, msg->theta, msg->psi);
-        return;
-      }
-
-      Concurrency::ScopedRWLock(m_data_lock, true);
-      // Heading buffer maintains sign.
-      double psi;
-      psi = m_data.euler[AXIS_Z] + Math::Angles::minSignedAngle(m_data.euler[AXIS_Z], msg->psi);
-
-      if (m_declination_defined && m_use_declination)
-        psi += m_declination;
-
-      m_euler_filter.add({msg->phi, msg->theta, psi});
-      m_timer[TM_EULER].reset();
     }
 
     void

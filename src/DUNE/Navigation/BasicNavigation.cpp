@@ -115,7 +115,6 @@ namespace DUNE
                         | IMC::WaterVelocity::VAL_VEL_Z;
 
       // Register callbacks.
-      bind<IMC::Acceleration>(this);
       bind<IMC::AngularVelocity>(this);
       bind<IMC::DataSanity>(this);
       bind<IMC::Depth>(this);
@@ -164,28 +163,6 @@ namespace DUNE
       Memory::clear(m_origin);
       Memory::clear(m_avg_heave);
       Memory::clear(m_avg_gps);
-    }
-
-    void
-    BasicNavigation::consume(const IMC::Acceleration* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
-        return;
-
-      if (std::fabs(msg->x) > c_max_accel ||
-          std::fabs(msg->y) > c_max_accel ||
-          std::fabs(msg->z) > c_max_accel)
-      {
-        err(DTR("received acceleration beyond range: %f, %f, %f"),
-            msg->x, msg->y, msg->z);
-
-        return;
-      }
-
-      m_accel_bfr[AXIS_X] += msg->x;
-      m_accel_bfr[AXIS_Y] += msg->y;
-      m_accel_bfr[AXIS_Z] += msg->z;
-      ++m_accel_readings;
     }
 
     void
@@ -819,21 +796,11 @@ namespace DUNE
     BasicNavigation::updateBuffers(float filter)
     {
       // Reinitialize buffers.
-      updateAcceleration(filter);
       updateAngularVelocities(filter);
       updateDepth(filter);
       updateEulerDelta(filter);
 
       updateAll();
-    }
-
-    void
-    BasicNavigation::resetAcceleration(void)
-    {
-      m_accel_bfr[AXIS_X] = 0.0;
-      m_accel_bfr[AXIS_Y] = 0.0;
-      m_accel_bfr[AXIS_Z] = 0.0;
-      m_accel_readings = 0.0;
     }
 
     void
@@ -865,7 +832,6 @@ namespace DUNE
     void
     BasicNavigation::resetBuffers(void)
     {
-      resetAcceleration();
       resetAngularVelocity();
       resetDepth();
       resetEulerAnglesDelta();

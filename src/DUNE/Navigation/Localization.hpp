@@ -270,10 +270,13 @@ namespace DUNE
       onResourceRelease();
 
       virtual void
-      consume(const IMC::GpsFix* msg);
-
+      consume(const IMC::Acceleration* msg);
+      
       virtual void
       consume(const IMC::EulerAngles* msg);
+
+      virtual void
+      consume(const IMC::GpsFix* msg);
 
       double
       get(unsigned quant, unsigned ax = 0);

@@ -43,13 +43,6 @@ namespace DUNE
     // Export DLL Symbol.
     class DUNE_DLL_SYM BasicNavigation;
 
-    // //! Weighted Moving Average filter value.
-    // static const float c_wma_filter = 0.1f;
-    // //! Maximum acceleration reading.
-    // static const double c_max_accel = 30.0f;
-    // //! Maximum angular velocity reading (5 times mathematical constant PI).
-    // static const double c_max_agvel = 15.708f;
-
     //! Navigation task states.
     enum SMStates
     {
@@ -115,9 +108,6 @@ namespace DUNE
       //! Release allocated resources.
       virtual void
       onResourceRelease(void);
-
-      void
-      consume(const IMC::Acceleration* msg);
 
       void
       consume(const IMC::AngularVelocity* msg);
@@ -187,14 +177,6 @@ namespace DUNE
           m_altitude = -1.0;
 
         return m_altitude;
-      }
-
-      //! Get the acceleration along a specific axis.
-      //! @return acceleration value.
-      inline double
-      getAcceleration(unsigned axis) const
-      {
-        return m_accel_readings ? (m_accel_bfr[axis] / m_accel_readings) : 0.0;
       }
 
       //! Get angular velocity value along a specific axis.
@@ -273,14 +255,6 @@ namespace DUNE
         return m_angular_readings > c_wma_filter;
       }
 
-      //! Number of acceleration readings since last cycle plus constant filter gain.
-      //! @return true is received, false otherwise.
-      inline bool
-      gotAccelerationReadings(void) const
-      {
-        return m_accel_readings > c_wma_filter;
-      }
-
       //! Get AHRS Entity Id.
       //! @return AHRS entity id.
       inline unsigned
@@ -334,17 +308,6 @@ namespace DUNE
           m_agvel_bfr[i] =  getAngularVelocity(i) * filter;
 
         m_angular_readings = filter;
-      }
-
-      //! Routine to clear accelerations buffer.
-      //! @param[in] filter filter value.
-      inline void
-      updateAcceleration(float filter)
-      {
-        for (unsigned i = 0; i < 3; ++i)
-          m_accel_bfr[i] =  getAcceleration(i) * filter;
-
-        m_accel_readings = filter;
       }
 
       //! Routine to clear depth buffer.
@@ -426,10 +389,6 @@ namespace DUNE
       //! @param[in] filter sensor filters gain.
       void
       updateBuffers(float filter);
-
-      //! Routine to reset acceleration buffers.
-      void
-      resetAcceleration(void);
 
       //! Routine to reset angular velocity buffers.
       void
@@ -555,11 +514,9 @@ namespace DUNE
       float m_depth_readings;
       float m_edelta_readings;
       float m_angular_readings;
-      float m_accel_readings;
       //! "Buffers" for sensors readings.
       double m_depth_bfr;
       double m_agvel_bfr[3];
-      double m_accel_bfr[3];
       //! Euler Angles Delta.
       double m_edelta_bfr[3];
       //! Euler Angles Delta timestep.
