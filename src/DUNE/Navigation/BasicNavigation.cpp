@@ -121,9 +121,7 @@ namespace DUNE
       bind<IMC::Depth>(this);
       bind<IMC::DepthOffset>(this);
       bind<IMC::Distance>(this);
-      bind<IMC::EulerAngles>(this);
       bind<IMC::EulerAnglesDelta>(this);
-      bind<IMC::GpsFix>(this);
       bind<IMC::GroundVelocity>(this);
       bind<IMC::LblConfig>(this);
       bind<IMC::LblRange>(this);
@@ -270,7 +268,7 @@ namespace DUNE
       float value = msg->value;
 
       if (m_alt_attitude_compensation)
-        value *= std::cos(getEuler(AXIS_X)) * std::cos(getEuler(AXIS_Y));
+        value *= std::cos(get(QT_EULER, AXIS_X)) * std::cos(get(QT_EULER, AXIS_Y));
 
       // Initialize altitude.
       if (m_altitude < 0.0)
@@ -278,34 +276,6 @@ namespace DUNE
       else
         // Exponential moving average.
         m_altitude += m_alt_ema_gain * (value - m_altitude);
-    }
-
-    void
-    BasicNavigation::consume(const IMC::EulerAngles* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
-        return;
-
-      if (std::fabs(msg->phi) > Math::c_pi ||
-          std::fabs(msg->theta) > Math::c_pi ||
-          std::fabs(msg->psi) > Math::c_pi)
-      {
-        war(DTR("received euler angles beyond range: %f, %f, %f"),
-            msg->phi, msg->theta, msg->psi);
-        return;
-      }
-
-      m_euler_bfr[AXIS_X] += msg->phi;
-      m_euler_bfr[AXIS_Y] += msg->theta;
-
-      // Heading buffer maintains sign.
-      m_euler_bfr[AXIS_Z] += getEuler(AXIS_Z) + Math::Angles::minSignedAngle(getEuler(AXIS_Z), msg->psi);
-      ++m_euler_readings;
-
-      if (m_declination_defined && m_use_declination)
-        m_euler_bfr[AXIS_Z] += m_declination;
-
-      m_timer[TM_EULER].reset();
     }
 
     void
@@ -376,7 +346,7 @@ namespace DUNE
         dispatch(stream);
 
       // Correct for roll angle.
-      y += std::sin(getEuler(AXIS_X)) * m_dist_gps_cg;
+      y += std::sin(get(QT_EULER, AXIS_X)) * m_dist_gps_cg;
 
       // Check distance to current LLH origin.
       if (Math::norm(x, y) > m_max_dis2ref)
@@ -530,8 +500,8 @@ namespace DUNE
       m_ranging.getLocation(beacon, &x, &y, &z);
 
       // Compute expected range.
-      double dx = m_kal.getState(STATE_X) + m_dist_lbl_gps * std::cos(getEuler(AXIS_Z)) - x;
-      double dy = m_kal.getState(STATE_Y) + m_dist_lbl_gps * std::sin(getEuler(AXIS_Z)) - y;
+      double dx = m_kal.getState(STATE_X) + m_dist_lbl_gps * std::cos(get(QT_EULER, AXIS_Z)) - x;
+      double dy = m_kal.getState(STATE_Y) + m_dist_lbl_gps * std::sin(get(QT_EULER, AXIS_Z)) - y;
       double dz = getDepth() - z;
       double exp_range = std::sqrt(dx * dx + dy * dy + dz * dz);
 
@@ -779,8 +749,8 @@ namespace DUNE
       m_estate.x = m_kal.getState(STATE_X);
       m_estate.y = m_kal.getState(STATE_Y);
       m_estate.z = m_last_z + getDepth();
-      m_estate.phi = Math::Angles::normalizeRadian(getEuler(AXIS_X));
-      m_estate.theta = Math::Angles::normalizeRadian(getEuler(AXIS_Y));
+      m_estate.phi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
+      m_estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
       m_estate.p = getAngularVelocity(AXIS_X);
       m_estate.q = getAngularVelocity(AXIS_Y);
       m_estate.alt = getAltitude();
@@ -803,19 +773,19 @@ namespace DUNE
       if (m_active)
         return true;
 
-      if (gotEulerReadings())
+      if (got(QT_EULER))
       {
         IMC::EstimatedState estate;
         estate.lat = get(QT_GPS_GEO, GEO_LAT);
         estate.lon = get(QT_GPS_GEO, GEO_LON);
         estate.height = get(QT_GPS_GEO, GEO_HEI);
-        estate.phi = Math::Angles::normalizeRadian(getEuler(AXIS_X));
-        estate.theta = Math::Angles::normalizeRadian(getEuler(AXIS_Y));
-        estate.psi = Math::Angles::normalizeRadian(getEuler(AXIS_Z));
+        estate.phi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
+        estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
+        estate.psi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
         estate.depth = getDepth();
         estate.alt = getAltitude();
         m_heading = estate.psi;
-        updateEuler(c_wma_filter);
+        updateFilter(QT_EULER);
         updateDepth(c_wma_filter);
 
         if (gotAngularReadings())
@@ -852,8 +822,9 @@ namespace DUNE
       updateAcceleration(filter);
       updateAngularVelocities(filter);
       updateDepth(filter);
-      updateEuler(filter);
       updateEulerDelta(filter);
+
+      updateAll();
     }
 
     void
@@ -883,15 +854,6 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::resetEulerAngles(void)
-    {
-      m_euler_bfr[AXIS_X] = 0.0;
-      m_euler_bfr[AXIS_Y] = 0.0;
-      m_euler_bfr[AXIS_Z] = 0.0;
-      m_euler_readings = 0.0;
-    }
-
-    void
     BasicNavigation::resetEulerAnglesDelta(void)
     {
       m_edelta_bfr[AXIS_X] = 0.0;
@@ -906,8 +868,9 @@ namespace DUNE
       resetAcceleration();
       resetAngularVelocity();
       resetDepth();
-      resetEulerAngles();
       resetEulerAnglesDelta();
+
+      resetAll();
     }
 
     void
@@ -987,9 +950,9 @@ namespace DUNE
     {
       // Insert euler angles into row matrix.
       Math::Matrix ea(3,1);
-      ea(0) = Math::Angles::normalizeRadian(getEuler(AXIS_X));
-      ea(1) = Math::Angles::normalizeRadian(getEuler(AXIS_Y));
-      ea(2) = Math::Angles::normalizeRadian(getEuler(AXIS_Z));
+      ea(0) = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
+      ea(1) = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
+      ea(2) = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
 
       // Earth rotation vector.
       Math::Matrix we(3,1);

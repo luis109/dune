@@ -152,10 +152,10 @@ namespace DUNE
     enum Quantity
     {
       QT_DEPTH = 0,
-      QT_ACCELERATION,
-      QT_ANGULAR_VELOCITY,
-      QT_EULER_ANGLES,
-      QT_DEULER_ANGLES,
+      QT_ACCEL,
+      QT_AGVEL,
+      QT_EULER,
+      QT_EDELTA,
       QT_ALTITUDE,
       QT_DEPTH_OFFSET,
       QT_RPM,
@@ -163,9 +163,10 @@ namespace DUNE
       QT_GPS_GEO,
       QT_GPS_SOG,
       QT_GPS_HACC,
+      QT_GPS_HDOP,
       QT_USBL,
-      QT_GR_VELOCITY,
-      QT_WT_VELOCITY,
+      QT_GRVEL,
+      QT_WTVEL,
       QT_SANITY,
       NUM_QUANT
     };
@@ -209,11 +210,14 @@ namespace DUNE
       double rpm;
 
       // GPS
-      std::array<double, 3> gps_pos;
-      std::array<double, 3> gps_geo;
-      double gps_sog;
-      double gps_hacc;
-      double gps_hdop;
+      struct
+      {
+        std::array<double, 3> pos;
+        std::array<double, 3> geo;
+        double sog;
+        double hacc;
+        double hdop;
+      }gps;
 
       std::array<double, 6> usbl;
       std::array<double, 2> gvel;
@@ -233,11 +237,11 @@ namespace DUNE
         altitude = -1.0;
         rpm = 0.0;
 
-        gps_pos.fill(0.0);
-        gps_geo.fill(0.0);
-        gps_sog = 0.0;
-        gps_hacc = 0.0;
-        gps_hdop = 0.0;
+        gps.pos.fill(0.0);
+        gps.geo.fill(0.0);
+        gps.sog = 0.0;
+        gps.hacc = 0.0;
+        gps.hdop = 0.0;
         usbl.fill(0.0);
 
         gvel.fill(0.0);
@@ -255,17 +259,39 @@ namespace DUNE
 
       //! Initialize resources.
       virtual void
-      onResourceInitialization(void);
+      onResourceInitialization();
 
       //! Resolve entities.
       virtual void
       onEntityResolution();
 
-      double
-      get(unsigned quant, unsigned ax = 0);
+      //! Release allocated resources.
+      virtual void
+      onResourceRelease();
 
       virtual void
       consume(const IMC::GpsFix* msg);
+
+      virtual void
+      consume(const IMC::EulerAngles* msg);
+
+      double
+      get(unsigned quant, unsigned ax = 0);
+      
+      bool
+      got(unsigned quant);
+    
+      void
+      reset();
+      
+      void
+      updateFilter(unsigned quant);
+
+      void
+      updateAll();
+
+      void
+      resetAll();
 
       //! Routine to check current declination value using WMM.
       //! @param[in] lat vehicle current latitude.

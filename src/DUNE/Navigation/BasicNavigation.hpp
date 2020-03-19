@@ -135,9 +135,6 @@ namespace DUNE
       consume(const IMC::DepthOffset* msg);
 
       void
-      consume(const IMC::EulerAngles* msg);
-
-      void
       consume(const IMC::EulerAnglesDelta* msg);
 
       void
@@ -213,13 +210,13 @@ namespace DUNE
       inline double
       getHeadingRate(void)
       {
-        double pitch = getEuler(AXIS_Y);
+        double pitch = get(QT_EULER, AXIS_Y);
 
         // Avoid division by zero.
         if (!std::cos(pitch))
           return 0;
 
-        double roll = getEuler(AXIS_X);
+        double roll = get(QT_EULER, AXIS_X);
         double p, q, r;
 
         if (m_dead_reckoning)
@@ -244,14 +241,6 @@ namespace DUNE
         return (std::sin(roll) * q + std::cos(roll) * r) / std::cos(pitch);
       }
 
-      //! Get Euler Angle value.
-      //! @return euler angle value.
-      inline double
-      getEuler(unsigned axis) const
-      {
-        return m_euler_readings ? (m_euler_bfr[axis] / m_euler_readings) : 0.0;
-      }
-
       //! Get Euler Angles increment value along a specific axis.
       //! @return euler angles increment value
       inline double
@@ -274,14 +263,6 @@ namespace DUNE
       gotDepthReadings(void) const
       {
         return m_depth_readings > c_wma_filter;
-      }
-
-      //! Number of euler angles readings since last cycle plus constant filter gain.
-      //! @return true is received, false otherwise.
-      inline bool
-      gotEulerReadings(void) const
-      {
-        return m_euler_readings > c_wma_filter;
       }
 
       //! Number of angular velocity readings since last cycle plus constant filter gain.
@@ -331,17 +312,6 @@ namespace DUNE
       getTimeStep(void)
       {
         return m_delta.getDelta();
-      }
-
-      //! Routine to clear euler angles buffer.
-      //! @param[in] filter filter value.
-      inline void
-      updateEuler(float filter)
-      {
-        for (unsigned i = 0; i < 3; ++i)
-          m_euler_bfr[i] = getEuler(i) * filter;
-
-        m_euler_readings = filter;
       }
 
       //! Routine to clear euler angles delta buffer.
@@ -469,10 +439,6 @@ namespace DUNE
       void
       resetDepth(void);
 
-      //! Routine to reset euler angles buffers.
-      void
-      resetEulerAngles(void);
-
       //! Routine to reset euler angles delta buffers.
       void
       resetEulerAnglesDelta(void);
@@ -587,13 +553,11 @@ namespace DUNE
       bool m_alt_sanity;
       //! Sum of weights of sensor readings between prediction cycles.
       float m_depth_readings;
-      float m_euler_readings;
       float m_edelta_readings;
       float m_angular_readings;
       float m_accel_readings;
       //! "Buffers" for sensors readings.
       double m_depth_bfr;
-      double m_euler_bfr[3];
       double m_agvel_bfr[3];
       double m_accel_bfr[3];
       //! Euler Angles Delta.

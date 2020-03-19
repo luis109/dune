@@ -213,9 +213,9 @@ namespace Navigation
         {
           A.fill(0.0);
 
-          double phi = Angles::normalizeRadian(getEuler(AXIS_X));
-          double theta = Angles::normalizeRadian(getEuler(AXIS_Y));
-          double yaw = Angles::normalizeRadian(getEuler(AXIS_Z));
+          double phi = Angles::normalizeRadian(get(QT_EULER, AXIS_X));
+          double theta = Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
+          double yaw = Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
 
           A(STATE_X, STATE_U) = std::cos(yaw) * std::cos(theta);
           A(STATE_X, STATE_V) = (std::cos(yaw) * std::sin(theta) * std::sin(phi)
@@ -239,7 +239,7 @@ namespace Navigation
         void
         logData(void)
         {
-          m_estate.psi = Angles::normalizeRadian(getEuler(AXIS_Z));
+          m_estate.psi = Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
           m_estate.r = Angles::normalizeRadian(getAngularVelocity(AXIS_Z));
           onDispatchNavigation();
 

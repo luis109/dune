@@ -119,16 +119,19 @@ namespace DUNE
       m_use_declination = !m_ctx.profiles.isSelected("Simulation");
       m_declination_defined = false;
       
-      // reset();
+      reset();
 
-      // Timer setup
-      // for (size_t i = 0; i < NUM_TIMER - 1; ++i)
-      //   m_timer[i].setTop(m_args.time_thresh[i]);
+      bind<IMC::EulerAngles>(this);
+      bind<IMC::GpsFix>(this);
     }
 
     void
     Localization::onResourceInitialization(void)
-    {
+    {      
+      // Timer setup
+      for (size_t i = 0; i < NUM_TIMER - 1; ++i)
+        m_timer[i].setTop(m_time_thresh[i]);
+
       m_return = false;
       m_update_kalman = false;
       m_avg_gps = new Math::MovingAverage<double>(m_avg_gps_samples);
@@ -159,10 +162,16 @@ namespace DUNE
     }
 
     void
+    Localization::onResourceRelease()
+    {
+      Memory::clear(m_avg_gps);
+    }
+
+    void
     Localization::consume(const IMC::GpsFix* msg)
     {
       Concurrency::ScopedRWLock(m_data_lock, true);
-      m_data.gps_hacc = -1.0;
+      m_data.gps.hacc = -1.0;
 
       // GpsFix validation.
       m_gps_rej.reason = std::numeric_limits<uint8_t>::max();
@@ -190,7 +199,7 @@ namespace DUNE
       if (msg->validity & IMC::GpsFix::GFV_VALID_HACC)
       {
         // For updating kalman gps parameters
-        m_data.gps_hacc = msg->hacc;
+        m_data.gps.hacc = msg->hacc;
 
         // Check if it is above Maximum Horizontal Accuracy.
         if (msg->hacc > m_max_hacc)
@@ -213,16 +222,43 @@ namespace DUNE
 
       // Speed over ground.
       if (msg->validity & IMC::GpsFix::GFV_VALID_SOG)
-        m_data.gps_sog = msg->sog;
+        m_data.gps.sog = msg->sog;
 
       // Check current declination value.
       checkDeclination(msg->lat, msg->lon, msg->height);
 
-      m_data.gps_geo[GEO_LAT] = msg->lat;
-      m_data.gps_geo[GEO_LON] = msg->lon;
-      m_data.gps_geo[GEO_HEI] = msg->height;
+      m_data.gps.geo[GEO_LAT] = msg->lat;
+      m_data.gps.geo[GEO_LON] = msg->lon;
+      m_data.gps.geo[GEO_HEI] = msg->height;
     }
-    
+
+    void
+    Localization::consume(const IMC::EulerAngles* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_AHRS])
+        return;
+
+      if (std::fabs(msg->phi) > Math::c_pi ||
+          std::fabs(msg->theta) > Math::c_pi ||
+          std::fabs(msg->psi) > Math::c_pi)
+      {
+        war(DTR("received euler angles beyond range: %f, %f, %f"),
+            msg->phi, msg->theta, msg->psi);
+        return;
+      }
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      // Heading buffer maintains sign.
+      double psi;
+      psi = m_data.euler[AXIS_Z] + Math::Angles::minSignedAngle(m_data.euler[AXIS_Z], msg->psi);
+
+      if (m_declination_defined && m_use_declination)
+        psi += m_declination;
+
+      m_euler_filter.add({msg->phi, msg->theta, psi});
+      m_timer[TM_EULER].reset();
+    }
+
     void
     Localization::checkDeclination(double lat, double lon, double height)
     {
@@ -242,82 +278,93 @@ namespace DUNE
       Concurrency::ScopedRWLock(m_data_lock, false);
       switch (quant)
       {
-        case QT_ACCELERATION:
+        case QT_ACCEL:
           return m_data.accel[ax];
-        case QT_ANGULAR_VELOCITY:
+        case QT_AGVEL:
           return m_data.agvel[ax];
         case QT_DEPTH:
           return m_data.depth[0];
         case QT_DEPTH_OFFSET:
           return m_data.depth_offset;
-        case QT_EULER_ANGLES:
+        case QT_EULER:
           return m_data.euler[ax];
         case QT_GPS_GEO:
-          return m_data.gps_geo[ax];
+          return m_data.gps.geo[ax];
         case QT_GPS_SOG:
-          return m_data.gps_sog;
+          return m_data.gps.sog;
         case QT_GPS_HACC:
-          return m_data.gps_hacc;
+          return m_data.gps.hacc;
+        case QT_GPS_HDOP:
+          return m_data.gps.hdop;
         default:
-          return -1;
+          return 0;
       }
 
-      return -1;
+      return 0;
     }
 
-      // bool
-      // got(unsigned quant)
-      // {
-      //   switch (quant)
-      //   {
-      //   case QT_ACCELERATION:
-      //     return m_accel_filter.gotReadings();
-      //   case QT_ANGULAR_VELOCITY:
-      //     return m_agvel_filter.gotReadings();
-      //   case QT_DEPTH:
-      //     return m_depth_filter.gotReadings();
-      //   case QT_EULER_ANGLES:
-      //     return m_euler_filter.gotReadings();
-      //   default:
-      //     return false;
-      //   }
+    bool
+    Localization::got(unsigned quant)
+    {
+      switch (quant)
+      {
+      case QT_ACCEL:
+        return m_accel_filter.gotReadings();
+      case QT_AGVEL:
+        return m_agvel_filter.gotReadings();
+      case QT_DEPTH:
+        return m_depth_filter.gotReadings();
+      case QT_EULER:
+        return m_euler_filter.gotReadings();
+      default:
+        return false;
+      }
 
-      //   return false;
-      // }
+      return false;
+    }
 
-      // void
-      // reset()
-      // {
-      //   Concurrency::ScopedRWLock(m_data_lock, true);
-      //   m_data.reset();
-      // }
+    void
+    Localization::reset()
+    {
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_data.reset();
+    }
 
-      // void
-      // updateFilter(unsigned quant)
-      // {
-      //   Concurrency::ScopedRWLock(m_data_lock, true);
-      //   switch (quant)
-      //   {
-      //     case QT_ACCELERATION:
-      //       return m_accel_filter.update();
-      //     case QT_ANGULAR_VELOCITY:
-      //       return m_agvel_filter.update();
-      //     case QT_DEPTH:
-      //       return m_depth_filter.update();
-      //     case QT_EULER_ANGLES:
-      //       return m_depth_filter.update();
-      //     default:
-      //       return;
-      //   }
+    void
+    Localization::resetAll()
+    {
+      m_accel_filter.reset();
+      m_agvel_filter.reset();
+      m_depth_filter.reset();
+      m_euler_filter.reset();
+    }
 
-      //   return;
-      // }
+    void
+    Localization::updateFilter(unsigned quant)
+    {
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      switch (quant)
+      {
+        case QT_ACCEL:
+          return m_accel_filter.update();
+        case QT_AGVEL:
+          return m_agvel_filter.update();
+        case QT_DEPTH:
+          return m_depth_filter.update();
+        case QT_EULER:
+          return m_euler_filter.update();
+        default:
+          return;
+      }
 
-      // void
-      // updateAll()
-      // {
-      //   for (size_t i = 0; i < 4; ++i)
-      //     updateFilter(i);
-      // }
+      return;
+    }
+
+    void
+    Localization::updateAll()
+    {
+      for (size_t i = 0; i < 4; ++i)
+        updateFilter(i);
+    }
   }
 }

@@ -593,7 +593,7 @@ namespace Navigation
           if (m_dead_reckoning)
             m_heading += tstep * hrate;
           else
-            m_heading += Angles::minSignedAngle(m_heading, Angles::normalizeRadian(getEuler(AXIS_Z)));
+            m_heading += Angles::minSignedAngle(m_heading, Angles::normalizeRadian(get(QT_EULER, AXIS_Z)));
 
           // Update heading in Kalman filter.
           m_kal.setOutput(OUT_PSI, m_heading);
@@ -631,7 +631,7 @@ namespace Navigation
             double speed_m  = getRpmToMs(m_rpm);
             if(m_args.rpm_estimation)
             {
-              u = m_rpm * m_kal.getState(STATE_K) * std::cos(getEuler(AXIS_Y));
+              u = m_rpm * m_kal.getState(STATE_K) * std::cos(get(QT_EULER, AXIS_Y));
               if(m_args.speed_relation_Limit)
               {
                 double speedR = (std::abs(u) - std::abs(speed_m))/ std::abs(speed_m) * 100;
@@ -686,7 +686,7 @@ namespace Navigation
 
           // Check alignment threshold index.
           double diff_psi = std::abs(Angles::normalizeRadian(Angles::normalizeRadian(m_kal.getState(STATE_PSI))
-                                                             - Angles::normalizeRadian(getEuler(AXIS_Z)) ) );
+                                                             - Angles::normalizeRadian(get(QT_EULER, AXIS_Z)) ) );
 
 
           if (m_dead_reckoning)
@@ -768,8 +768,8 @@ namespace Navigation
         {
           A.fill(0.0);
 
-          double phi = Angles::normalizeRadian(getEuler(AXIS_X));
-          double theta = Angles::normalizeRadian(getEuler(AXIS_Y));
+          double phi = Angles::normalizeRadian(get(QT_EULER, AXIS_X));
+          double theta = Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
 
           A(STATE_PSI, STATE_R) = 1.0;
 
@@ -836,7 +836,7 @@ namespace Navigation
                                           m_kal.getInnovation(OUT_GPS_Y));
           m_navdata.custom_y = m_kal.getState(STATE_K);
 
-          double ang = m_estate.psi - Angles::normalizeRadian(getEuler(AXIS_Z));
+          double ang = m_estate.psi - Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
           m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(ang));
         }
       };
