@@ -719,7 +719,7 @@ namespace Navigation
           reportToBus();
 
           // Reset variables.
-          updateBuffers(c_wma_filter);
+          updateFilters();
           m_gps_reading = false;
           m_usbl_reading = false;
           m_valid_gv = false;

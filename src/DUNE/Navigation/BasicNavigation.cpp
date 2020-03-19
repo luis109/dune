@@ -100,7 +100,6 @@ namespace DUNE
 
       m_dead_reckoning = false;
       m_aligned = false;
-      m_edelta_ts = 0.1;
       m_rpm = 0;
       m_lbl_reading = false;
 
@@ -113,7 +112,6 @@ namespace DUNE
                         | IMC::WaterVelocity::VAL_VEL_Z;
 
       // Register callbacks.
-      bind<IMC::EulerAnglesDelta>(this);
       bind<IMC::GroundVelocity>(this);
       bind<IMC::LblConfig>(this);
       bind<IMC::LblRange>(this);
@@ -137,7 +135,7 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::onResourceInitialization(void)
+    BasicNavigation::onResourceInitialization()
     {
       Localization::onResourceInitialization();
       m_avg_heave = new Math::MovingAverage<double>(m_avg_heave_samples);
@@ -145,40 +143,17 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::onEntityResolution(void)
+    BasicNavigation::onEntityResolution()
     { 
       Localization::onEntityResolution();
     }
 
     void
-    BasicNavigation::onResourceRelease(void)
+    BasicNavigation::onResourceRelease()
     {
+      Localization::onResourceRelease();
       Memory::clear(m_origin);
       Memory::clear(m_avg_heave);
-      Memory::clear(m_avg_gps);
-    }
-
-    void
-    BasicNavigation::consume(const IMC::EulerAnglesDelta* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_IMU])
-        return;
-
-      if (std::fabs(msg->x) > Math::c_pi / 10.0 ||
-          std::fabs(msg->y) > Math::c_pi / 10.0 ||
-          std::fabs(msg->z) > Math::c_pi / 10.0)
-      {
-        war(DTR("received euler angles delta beyond range: %f, %f, %f"),
-            msg->x, msg->y, msg->z);
-        return;
-      }
-
-      m_edelta_bfr[AXIS_X] += msg->x;
-      m_edelta_bfr[AXIS_Y] += msg->y;
-      m_edelta_bfr[AXIS_Z] += msg->z;
-
-      ++m_edelta_readings;
-      m_edelta_ts = msg->timestep;
     }
 
     void
@@ -507,7 +482,7 @@ namespace DUNE
       m_valid_gv = false;
       m_valid_wv = false;
 
-      resetBuffers();
+      resetFilters();
     }
 
     bool
@@ -693,32 +668,6 @@ namespace DUNE
       dispatch(m_estate, DF_KEEP_TIME);
       dispatch(m_uncertainty, DF_KEEP_TIME);
       dispatch(m_navdata, DF_KEEP_TIME);
-    }
-
-    void
-    BasicNavigation::updateBuffers(float filter)
-    {
-      // Reinitialize buffers.
-      updateEulerDelta(filter);
-
-      updateAll();
-    }
-
-    void
-    BasicNavigation::resetEulerAnglesDelta(void)
-    {
-      m_edelta_bfr[AXIS_X] = 0.0;
-      m_edelta_bfr[AXIS_Y] = 0.0;
-      m_edelta_bfr[AXIS_Z] = 0.0;
-      m_edelta_readings = 0.0;
-    }
-
-    void
-    BasicNavigation::resetBuffers(void)
-    {
-      resetEulerAnglesDelta();
-
-      resetAll();
     }
 
     void

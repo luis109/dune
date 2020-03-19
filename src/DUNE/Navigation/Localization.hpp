@@ -232,7 +232,7 @@ namespace DUNE
         edelta.fill(0.0);
         depth.fill(0.0);
 
-        edelta_ts = 0.0;
+        edelta_ts = 0.1;
         depth_offset = 0.0;
         altitude = -1.0;
         rpm = 0.0;
@@ -275,20 +275,23 @@ namespace DUNE
       virtual void
       consume(const IMC::AngularVelocity* msg);
 
-      void
+      virtual void
       consume(const IMC::DataSanity* msg);
 
-      void
+      virtual void
       consume(const IMC::Depth* msg);
 
-      void
+      virtual void
       consume(const IMC::DepthOffset* msg);
 
-      void
+      virtual void
       consume(const IMC::Distance* msg);
 
       virtual void
       consume(const IMC::EulerAngles* msg);
+
+      virtual void
+      consume(const IMC::EulerAnglesDelta* msg);
 
       virtual void
       consume(const IMC::GpsFix* msg);
@@ -298,6 +301,9 @@ namespace DUNE
       
       bool
       got(unsigned quant);
+
+      bool
+      gotReadings(unsigned quant);
     
       void
       reset();
@@ -315,10 +321,10 @@ namespace DUNE
       updateFilter(unsigned quant);
 
       void
-      updateAll();
+      updateFilters();
 
       void
-      resetAll();
+      resetFilters();
 
       //! Routine to check current declination value using WMM.
       //! @param[in] lat vehicle current latitude.

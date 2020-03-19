@@ -124,6 +124,7 @@ namespace DUNE
       bind<IMC::DepthOffset>(this);
       bind<IMC::Distance>(this);
       bind<IMC::EulerAngles>(this);
+      bind<IMC::EulerAnglesDelta>(this);
       bind<IMC::GpsFix>(this);
     }
 
@@ -316,6 +317,26 @@ namespace DUNE
     }
 
     void
+    Localization::consume(const IMC::EulerAnglesDelta* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_IMU])
+        return;
+
+      if (std::fabs(msg->x) > Math::c_pi / 10.0 ||
+          std::fabs(msg->y) > Math::c_pi / 10.0 ||
+          std::fabs(msg->z) > Math::c_pi / 10.0)
+      {
+        war(DTR("received euler angles delta beyond range: %f, %f, %f"),
+            msg->x, msg->y, msg->z);
+        return;
+      }
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_edelta_filter->add({msg->x, msg->y, msg->z});
+      m_data.edelta_ts = msg->timestep;
+    }
+
+    void
     Localization::consume(const IMC::GpsFix* msg)
     {
       Concurrency::ScopedRWLock(m_data_lock, true);
@@ -470,6 +491,28 @@ namespace DUNE
       return false;
     }
 
+    bool
+    Localization::gotReadings(unsigned quant)
+    {
+      switch (quant)
+      {
+      case QT_ACCEL:
+        return m_accel_filter->got();
+      case QT_AGVEL:
+        return m_agvel_filter->got();
+      case QT_DEPTH:
+        return m_depth_filter->got();
+      case QT_EDELTA:
+        return m_edelta_filter->got();
+      case QT_EULER:
+        return m_euler_filter->got();
+      default:
+        return false;
+      }
+
+      return false;
+    }
+
     void
     Localization::reset()
     {
@@ -478,7 +521,7 @@ namespace DUNE
     }
 
     void
-    Localization::resetAll()
+    Localization::resetFilters()
     {
       m_accel_filter->reset();
       m_agvel_filter->reset();
@@ -511,7 +554,7 @@ namespace DUNE
     }
 
     void
-    Localization::updateAll()
+    Localization::updateFilters()
     {
       for (size_t i = 0; i < 4; ++i)
         updateFilter(i);

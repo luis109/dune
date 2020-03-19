@@ -110,9 +110,6 @@ namespace DUNE
       onResourceRelease(void);
 
       void
-      consume(const IMC::EulerAnglesDelta* msg);
-
-      void
       consume(const IMC::GpsFix* msg);
 
       void
@@ -151,13 +148,13 @@ namespace DUNE
 
         if (m_dead_reckoning)
         {
-          if (!m_edelta_readings)
+          if (!gotReadings(QT_EDELTA))
             return 0.0;
 
           // Make sure the following corresponds to angular velocity in all IMUs.
-          p = getEulerDelta(AXIS_X) / getEulerDeltaTimestep();
-          q = getEulerDelta(AXIS_Y) / getEulerDeltaTimestep();
-          r = getEulerDelta(AXIS_Z) / getEulerDeltaTimestep();
+          p = get(QT_EDELTA, AXIS_X) / get(QT_EDELTA_TS);
+          q = get(QT_EDELTA, AXIS_Y) / get(QT_EDELTA_TS);
+          r = get(QT_EDELTA, AXIS_Z) / get(QT_EDELTA_TS);
         }
         else
         {
@@ -169,22 +166,6 @@ namespace DUNE
         extractEarthRotation(p, q, r);
 
         return (std::sin(roll) * q + std::cos(roll) * r) / std::cos(pitch);
-      }
-
-      //! Get Euler Angles increment value along a specific axis.
-      //! @return euler angles increment value
-      inline double
-      getEulerDelta(unsigned axis) const
-      {
-        return m_edelta_readings ? (m_edelta_bfr[axis] / m_edelta_readings) : 0.0;
-      }
-
-      //! Get Euler Angles increment value along a specific axis.
-      //! @return euler angles increment value
-      inline float
-      getEulerDeltaTimestep(void) const
-      {
-        return m_edelta_ts;
       }
 
       //! Get AHRS Entity Id.
@@ -218,17 +199,6 @@ namespace DUNE
       getTimeStep(void)
       {
         return m_delta.getDelta();
-      }
-
-      //! Routine to clear euler angles delta buffer.
-      //! @param[in] filter filter value.
-      inline void
-      updateEulerDelta(float filter)
-      {
-        for (unsigned i = 0; i < 3; ++i)
-          m_edelta_bfr[i] =  getEulerDelta(i) * filter;
-
-        m_edelta_readings = filter;
       }
 
       //! Routine to reset navigation.
@@ -297,15 +267,6 @@ namespace DUNE
       void
       reportToBus(void);
 
-      //! Routine to update sensor buffers.
-      //! @param[in] filter sensor filters gain.
-      void
-      updateBuffers(float filter);
-
-      //! Routine to reset euler angles delta buffers.
-      void
-      resetEulerAnglesDelta(void);
-
       //! Routine to check navigation uncertainty.
       //! @param[in] abort abort if position uncertainty is exceeded.
       void
@@ -366,10 +327,6 @@ namespace DUNE
       void
       extractEarthRotation(double& p, double& q, double& r);
 
-      //! Routine to reset sensor buffers.
-      void
-      resetBuffers(void);
-
       //! Routine to start navigation
       //! @param[in] msg GpsFix IMC message
       void
@@ -410,12 +367,6 @@ namespace DUNE
       Time::Delta m_dvl_wv_tstep;
       //! GPS disable for debug
       bool m_gps_disable;
-      //! Sum of weights of sensor readings between prediction cycles.
-      float m_edelta_readings;
-      //! Euler Angles Delta.
-      double m_edelta_bfr[3];
-      //! Euler Angles Delta timestep.
-      float m_edelta_ts;
       //! Moving Average for heave.
       Math::MovingAverage<double>* m_avg_heave;
       //! Number of samples to average heave.
