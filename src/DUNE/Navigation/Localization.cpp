@@ -118,20 +118,21 @@ namespace DUNE
       // Do not use the declination offset when simulating.
       m_use_declination = !m_ctx.profiles.isSelected("Simulation");
       m_declination_defined = false;
-      
-      reset();
       m_sane = true;
 
       bind<IMC::Acceleration>(this);
       bind<IMC::AngularVelocity>(this);
       bind<IMC::DataSanity>(this);
+      bind<IMC::Distance>(this);
       bind<IMC::EulerAngles>(this);
       bind<IMC::GpsFix>(this);
     }
 
     void
     Localization::onResourceInitialization(void)
-    {      
+    {
+      reset();
+
       // Timer setup
       for (size_t i = 0; i < NUM_TIMER - 1; ++i)
         m_timer[i].setTop(m_time_thresh[i]);
@@ -224,6 +225,34 @@ namespace DUNE
       {
         m_sane = true;
       }
+    }
+
+    void
+    Localization::consume(const IMC::Distance* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_ALT])
+        return;
+
+      if (msg->validity == IMC::Distance::DV_INVALID)
+        return;
+
+      // Reset altitude timer.
+      m_timer[TM_ALT].reset();
+
+      if (!m_sane)
+        return;
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      float value = msg->value;
+      if (m_alt_attitude_compensation)
+        value *= std::cos(m_data.euler[AXIS_X]) * std::cos(m_data.euler[AXIS_Y]);
+
+      // Initialize altitude.
+      if (m_data.altitude < 0.0)
+        m_data.altitude = value;
+      else
+        // Exponential moving average.
+        m_data.altitude += m_alt_ema_gain * (value - m_data.altitude);
     }
 
     void
@@ -341,6 +370,26 @@ namespace DUNE
           return m_data.accel[ax];
         case QT_AGVEL:
           return m_data.agvel[ax];
+
+        //! Get vehicle altitude.
+        //! Negative value denotes invalid estimate.
+        //! @return altitude value.
+        case QT_ALTITUDE:
+          if (!m_sane)
+          {
+            if (m_timer[TM_SAN].overflow())
+              m_data.altitude = -1.0;
+            else
+              m_data.altitude = 0.0;
+
+            return m_data.altitude;
+          }
+
+          if (m_timer[TM_ALT].overflow())
+            m_data.altitude = -1.0;
+
+          return m_data.altitude;
+
         case QT_DEPTH:
           return m_data.depth[0];
         case QT_DEPTH_OFFSET:

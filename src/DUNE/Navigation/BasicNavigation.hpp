@@ -110,9 +110,6 @@ namespace DUNE
       onResourceRelease(void);
 
       void
-      consume(const IMC::Distance* msg);
-
-      void
       consume(const IMC::Depth* msg);
 
       void
@@ -149,28 +146,6 @@ namespace DUNE
       getDepth(void) const
       {
         return m_depth_readings ? (m_depth_bfr / m_depth_readings) : 0.0;
-      }
-
-      //! Get vehicle altitude.
-      //! Negative value denotes invalid estimate.
-      //! @return altitude value.
-      inline double
-      getAltitude(void)
-      {
-        if (!m_sane)
-        {
-          if (m_timer[TM_SAN].overflow())
-            m_altitude = -1.0;
-          else
-            m_altitude = 0.0;
-
-          return m_altitude;
-        }
-
-        if (m_timer[TM_ALT].overflow())
-          m_altitude = -1.0;
-
-        return m_altitude;
       }
 
       //! Get heading rate value.
@@ -467,8 +442,6 @@ namespace DUNE
       Time::Delta m_dvl_gv_tstep;
       //! Timestep between consecutive valid water velocity messages.
       Time::Delta m_dvl_wv_tstep;
-      //! Altitude value.
-      float m_altitude;
       //! GPS disable for debug
       bool m_gps_disable;
       //! Sum of weights of sensor readings between prediction cycles.

@@ -116,7 +116,6 @@ namespace DUNE
       // Register callbacks.
       bind<IMC::Depth>(this);
       bind<IMC::DepthOffset>(this);
-      bind<IMC::Distance>(this);
       bind<IMC::EulerAnglesDelta>(this);
       bind<IMC::GroundVelocity>(this);
       bind<IMC::LblConfig>(this);
@@ -183,34 +182,6 @@ namespace DUNE
         return;
 
       m_depth_offset = msg->value;
-    }
-
-    void
-    BasicNavigation::consume(const IMC::Distance* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_ALT])
-        return;
-
-      if (msg->validity == IMC::Distance::DV_INVALID)
-        return;
-
-      // Reset altitude timer.
-      m_timer[TM_ALT].reset();
-
-      if (!m_sane)
-        return;
-
-      float value = msg->value;
-
-      if (m_alt_attitude_compensation)
-        value *= std::cos(get(QT_EULER, AXIS_X)) * std::cos(get(QT_EULER, AXIS_Y));
-
-      // Initialize altitude.
-      if (m_altitude < 0.0)
-        m_altitude = value;
-      else
-        // Exponential moving average.
-        m_altitude += m_alt_ema_gain * (value - m_altitude);
     }
 
     void
@@ -554,7 +525,7 @@ namespace DUNE
       m_last_z = 0.0;
 
       m_heading = 0.0;
-      m_altitude = -1;
+      resetAltitude();
 
       m_navstate = SM_STATE_IDLE;
       setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_WAIT_GPS_FIX);
@@ -688,7 +659,7 @@ namespace DUNE
       m_estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
       m_estate.p = get(QT_AGVEL, AXIS_X);
       m_estate.q = get(QT_AGVEL, AXIS_Y);
-      m_estate.alt = getAltitude();
+      m_estate.alt = get(QT_ALTITUDE);
       m_estate.depth = getDepth();
       m_estate.w = m_avg_heave->update(m_deriv_heave.update(m_estate.depth));
 
@@ -718,7 +689,7 @@ namespace DUNE
         estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
         estate.psi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
         estate.depth = getDepth();
-        estate.alt = getAltitude();
+        estate.alt = get(QT_ALTITUDE);
         m_heading = estate.psi;
         updateFilter(QT_EULER);
         updateDepth(c_wma_filter);

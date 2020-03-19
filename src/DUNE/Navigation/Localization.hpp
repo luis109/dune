@@ -277,6 +277,9 @@ namespace DUNE
       void
       consume(const IMC::DataSanity* msg);
 
+      void
+      consume(const IMC::Distance* msg);
+
       virtual void
       consume(const IMC::EulerAngles* msg);
 
@@ -291,6 +294,15 @@ namespace DUNE
     
       void
       reset();
+
+      // This is a dirty hack to reset altitude to invalid value (-1) in the correct place
+      // This has got to go
+      void
+      resetAltitude()
+      {
+        Concurrency::ScopedRWLock(m_data_lock, true);
+        m_data.altitude = -1.0;
+      }
       
       void
       updateFilter(unsigned quant);
