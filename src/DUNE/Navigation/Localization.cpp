@@ -37,6 +37,7 @@ namespace DUNE
 
     Localization::Localization(const std::string& name, Tasks::Context& ctx):
       Tasks::Periodic(name, ctx),
+      m_avg_gps(NULL),
       m_accel_filter(WMAFilter<3>(c_wma_filter, m_data.accel)),
       m_agvel_filter(WMAFilter<3>(c_wma_filter, m_data.agvel)),
       m_depth_filter(WMAFilter<1>(c_wma_filter, m_data.depth)),
@@ -123,6 +124,8 @@ namespace DUNE
       bind<IMC::Acceleration>(this);
       bind<IMC::AngularVelocity>(this);
       bind<IMC::DataSanity>(this);
+      bind<IMC::Depth>(this);
+      bind<IMC::DepthOffset>(this);
       bind<IMC::Distance>(this);
       bind<IMC::EulerAngles>(this);
       bind<IMC::GpsFix>(this);
@@ -225,6 +228,29 @@ namespace DUNE
       {
         m_sane = true;
       }
+    }
+
+    void
+    Localization::consume(const IMC::Depth* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH] && !m_timer[TM_MAIN_DEPTH].overflow())
+        return;
+
+      if (msg->getSourceEntity() == m_entity_id[DEV_DEPTH])
+        m_timer[TM_MAIN_DEPTH].reset();
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_depth_filter.add({msg->value + m_depth_offset});
+      m_timer[TM_DEPTH].reset();
+    }
+
+    void
+    Localization::consume(const IMC::DepthOffset* msg)
+    {
+      if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH])
+        return;
+
+      m_depth_offset = msg->value;
     }
 
     void

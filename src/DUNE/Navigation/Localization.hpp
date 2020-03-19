@@ -278,6 +278,12 @@ namespace DUNE
       consume(const IMC::DataSanity* msg);
 
       void
+      consume(const IMC::Depth* msg);
+
+      void
+      consume(const IMC::DepthOffset* msg);
+
+      void
       consume(const IMC::Distance* msg);
 
       virtual void
@@ -376,6 +382,8 @@ namespace DUNE
       Data m_data;
       //! Data read write lock
       Concurrency::RWLock m_data_lock;
+      //! Depth offset value
+      double m_depth_offset;
       //! Filters
       WMAFilter<3> m_accel_filter;
       WMAFilter<3> m_agvel_filter;

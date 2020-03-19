@@ -815,7 +815,7 @@ namespace Navigation
 
           m_estate.u = m_avg_speed->update(m_kal.getState(STATE_U));
           m_estate.v = m_kal.getState(STATE_V);
-          m_estate.depth = getDepth() - m_estate.theta * m_args.distance_depth_sensor;
+          m_estate.depth = get(QT_DEPTH) - m_estate.theta * m_args.distance_depth_sensor;
           m_estate.z = m_last_z - m_estate.depth;
 
           // Log Navigation Uncertainty.

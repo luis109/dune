@@ -110,12 +110,6 @@ namespace DUNE
       onResourceRelease(void);
 
       void
-      consume(const IMC::Depth* msg);
-
-      void
-      consume(const IMC::DepthOffset* msg);
-
-      void
       consume(const IMC::EulerAnglesDelta* msg);
 
       void
@@ -140,13 +134,6 @@ namespace DUNE
       consume(const IMC::WaterVelocity* msg);
 
     protected:
-      //! Get depth value.
-      //! @return depth value.
-      inline double
-      getDepth(void) const
-      {
-        return m_depth_readings ? (m_depth_bfr / m_depth_readings) : 0.0;
-      }
 
       //! Get heading rate value.
       //! @return heading rate.
@@ -200,14 +187,6 @@ namespace DUNE
         return m_edelta_ts;
       }
 
-      //! Number of depth readings since last cycle plus constant filter gain.
-      //! @return true is received, false otherwise.
-      inline bool
-      gotDepthReadings(void) const
-      {
-        return m_depth_readings > c_wma_filter;
-      }
-
       //! Get AHRS Entity Id.
       //! @return AHRS entity id.
       inline unsigned
@@ -250,15 +229,6 @@ namespace DUNE
           m_edelta_bfr[i] =  getEulerDelta(i) * filter;
 
         m_edelta_readings = filter;
-      }
-
-      //! Routine to clear depth buffer.
-      //! @param[in] filter filter value.
-      inline void
-      updateDepth(float filter)
-      {
-        m_depth_bfr = getDepth() * filter;
-        m_depth_readings = filter;
       }
 
       //! Routine to reset navigation.
@@ -331,10 +301,6 @@ namespace DUNE
       //! @param[in] filter sensor filters gain.
       void
       updateBuffers(float filter);
-
-      //! Routine to reset depth buffers.
-      void
-      resetDepth(void);
 
       //! Routine to reset euler angles delta buffers.
       void
@@ -445,20 +411,13 @@ namespace DUNE
       //! GPS disable for debug
       bool m_gps_disable;
       //! Sum of weights of sensor readings between prediction cycles.
-      float m_depth_readings;
       float m_edelta_readings;
-      //! "Buffers" for sensors readings.
-      double m_depth_bfr;
       //! Euler Angles Delta.
       double m_edelta_bfr[3];
       //! Euler Angles Delta timestep.
       float m_edelta_ts;
-      //! Depth offset value.
-      float m_depth_offset;
       //! Moving Average for heave.
       Math::MovingAverage<double>* m_avg_heave;
-      //! Moving Average for GpsFix.
-      Math::MovingAverage<double>* m_avg_gps;
       //! Number of samples to average heave.
       unsigned m_avg_heave_samples;
       // bool m_use_declination;

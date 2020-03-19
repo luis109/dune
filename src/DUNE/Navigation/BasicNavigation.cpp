@@ -49,8 +49,7 @@ namespace DUNE
       Navigation::Localization(name, ctx),
       m_active(false),
       m_origin(NULL),
-      m_avg_heave(NULL),
-      m_avg_gps(NULL)
+      m_avg_heave(NULL)
     {
       // Declare configuration parameters.
       param("Maximum Distance to Reference", m_max_dis2ref)
@@ -114,8 +113,6 @@ namespace DUNE
                         | IMC::WaterVelocity::VAL_VEL_Z;
 
       // Register callbacks.
-      bind<IMC::Depth>(this);
-      bind<IMC::DepthOffset>(this);
       bind<IMC::EulerAnglesDelta>(this);
       bind<IMC::GroundVelocity>(this);
       bind<IMC::LblConfig>(this);
@@ -159,29 +156,6 @@ namespace DUNE
       Memory::clear(m_origin);
       Memory::clear(m_avg_heave);
       Memory::clear(m_avg_gps);
-    }
-
-    void
-    BasicNavigation::consume(const IMC::Depth* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH] && !m_timer[TM_MAIN_DEPTH].overflow())
-        return;
-
-      if (msg->getSourceEntity() == m_entity_id[DEV_DEPTH])
-        m_timer[TM_MAIN_DEPTH].reset();
-
-      m_depth_bfr += msg->value + m_depth_offset;
-      ++m_depth_readings;
-      m_timer[TM_DEPTH].reset();
-    }
-
-    void
-    BasicNavigation::consume(const IMC::DepthOffset* msg)
-    {
-      if (msg->getSourceEntity() != m_entity_id[DEV_DEPTH])
-        return;
-
-      m_depth_offset = msg->value;
     }
 
     void
@@ -408,7 +382,7 @@ namespace DUNE
       // Compute expected range.
       double dx = m_kal.getState(STATE_X) + m_dist_lbl_gps * std::cos(get(QT_EULER, AXIS_Z)) - x;
       double dy = m_kal.getState(STATE_Y) + m_dist_lbl_gps * std::sin(get(QT_EULER, AXIS_Z)) - y;
-      double dz = getDepth() - z;
+      double dz = get(QT_DEPTH) - z;
       double exp_range = std::sqrt(dx * dx + dy * dy + dz * dz);
 
       runKalmanLBL((int)beacon, range, dx, dy, exp_range);
@@ -654,13 +628,13 @@ namespace DUNE
     {
       m_estate.x = m_kal.getState(STATE_X);
       m_estate.y = m_kal.getState(STATE_Y);
-      m_estate.z = m_last_z + getDepth();
+      m_estate.z = m_last_z + get(QT_DEPTH);
       m_estate.phi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
       m_estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
       m_estate.p = get(QT_AGVEL, AXIS_X);
       m_estate.q = get(QT_AGVEL, AXIS_Y);
       m_estate.alt = get(QT_ALTITUDE);
-      m_estate.depth = getDepth();
+      m_estate.depth = get(QT_DEPTH);
       m_estate.w = m_avg_heave->update(m_deriv_heave.update(m_estate.depth));
 
       // Velocity in the navigation frame.
@@ -688,11 +662,11 @@ namespace DUNE
         estate.phi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
         estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
         estate.psi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
-        estate.depth = getDepth();
+        estate.depth = get(QT_DEPTH);
         estate.alt = get(QT_ALTITUDE);
         m_heading = estate.psi;
         updateFilter(QT_EULER);
-        updateDepth(c_wma_filter);
+        updateFilter(QT_DEPTH);
 
         if (got(QT_AGVEL))
         {
@@ -725,18 +699,9 @@ namespace DUNE
     BasicNavigation::updateBuffers(float filter)
     {
       // Reinitialize buffers.
-      updateDepth(filter);
       updateEulerDelta(filter);
 
       updateAll();
-    }
-
-    void
-    BasicNavigation::resetDepth(void)
-    {
-      m_depth_bfr = 0.0;
-      m_depth_readings = 0.0;
-      m_depth_offset = 0.0;
     }
 
     void
@@ -751,7 +716,6 @@ namespace DUNE
     void
     BasicNavigation::resetBuffers(void)
     {
-      resetDepth();
       resetEulerAnglesDelta();
 
       resetAll();
