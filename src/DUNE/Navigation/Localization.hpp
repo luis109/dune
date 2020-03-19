@@ -156,6 +156,7 @@ namespace DUNE
       QT_AGVEL,
       QT_EULER,
       QT_EDELTA,
+      QT_EDELTA_TS,
       QT_ALTITUDE,
       QT_DEPTH_OFFSET,
       QT_RPM,
@@ -385,10 +386,11 @@ namespace DUNE
       //! Depth offset value
       double m_depth_offset;
       //! Filters
-      WMAFilter<3> m_accel_filter;
-      WMAFilter<3> m_agvel_filter;
-      WMAFilter<1> m_depth_filter;
-      WMAFilter<3> m_euler_filter;
+      WMAFilter<3>* m_accel_filter;
+      WMAFilter<3>* m_agvel_filter;
+      WMAFilter<1>* m_depth_filter;
+      WMAFilter<3>* m_euler_filter;
+      WMAFilter<3>* m_edelta_filter;
     };
   }
 }

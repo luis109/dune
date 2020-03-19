@@ -37,11 +37,7 @@ namespace DUNE
 
     Localization::Localization(const std::string& name, Tasks::Context& ctx):
       Tasks::Periodic(name, ctx),
-      m_avg_gps(NULL),
-      m_accel_filter(WMAFilter<3>(c_wma_filter, m_data.accel)),
-      m_agvel_filter(WMAFilter<3>(c_wma_filter, m_data.agvel)),
-      m_depth_filter(WMAFilter<1>(c_wma_filter, m_data.depth)),
-      m_euler_filter(WMAFilter<3>(c_wma_filter, m_data.euler))
+      m_avg_gps(NULL)
     {
       param("Entity Labels", m_entity_labels)
       .size(NUM_DEV)
@@ -141,6 +137,12 @@ namespace DUNE
         m_timer[i].setTop(m_time_thresh[i]);
 
       m_avg_gps = new Math::MovingAverage<double>(m_avg_gps_samples);
+
+      m_accel_filter = new WMAFilter<3>(c_wma_filter, m_data.accel);
+      m_agvel_filter = new WMAFilter<3>(c_wma_filter, m_data.agvel);
+      m_depth_filter = new WMAFilter<1>(c_wma_filter, m_data.depth);
+      m_edelta_filter = new WMAFilter<3>(c_wma_filter, m_data.edelta);
+      m_euler_filter = new WMAFilter<3>(c_wma_filter, m_data.euler);
     }
 
     void
@@ -171,6 +173,11 @@ namespace DUNE
     Localization::onResourceRelease()
     {
       Memory::clear(m_avg_gps);
+      Memory::clear(m_accel_filter);
+      Memory::clear(m_agvel_filter);
+      Memory::clear(m_depth_filter);
+      Memory::clear(m_edelta_filter);
+      Memory::clear(m_euler_filter);
     }
 
     void
@@ -190,7 +197,7 @@ namespace DUNE
       }
 
       Concurrency::ScopedRWLock(m_data_lock, true);
-      m_accel_filter.add({msg->x, msg->y, msg->z});
+      m_accel_filter->add({msg->x, msg->y, msg->z});
     }
 
     void
@@ -210,7 +217,7 @@ namespace DUNE
       }
 
       Concurrency::ScopedRWLock(m_data_lock, true);
-      m_agvel_filter.add({msg->x, msg->y, msg->z});
+      m_agvel_filter->add({msg->x, msg->y, msg->z});
     }
 
     void
@@ -240,7 +247,7 @@ namespace DUNE
         m_timer[TM_MAIN_DEPTH].reset();
 
       Concurrency::ScopedRWLock(m_data_lock, true);
-      m_depth_filter.add({msg->value + m_depth_offset});
+      m_depth_filter->add({msg->value + m_depth_offset});
       m_timer[TM_DEPTH].reset();
     }
 
@@ -304,7 +311,7 @@ namespace DUNE
       if (m_declination_defined && m_use_declination)
         psi += m_declination;
 
-      m_euler_filter.add({msg->phi, msg->theta, psi});
+      m_euler_filter->add({msg->phi, msg->theta, psi});
       m_timer[TM_EULER].reset();
     }
 
@@ -420,6 +427,10 @@ namespace DUNE
           return m_data.depth[0];
         case QT_DEPTH_OFFSET:
           return m_data.depth_offset;
+        case QT_EDELTA:
+          return m_data.edelta[ax];
+        case QT_EDELTA_TS:
+          return m_data.edelta_ts;
         case QT_EULER:
           return m_data.euler[ax];
         case QT_GPS_GEO:
@@ -443,13 +454,15 @@ namespace DUNE
       switch (quant)
       {
       case QT_ACCEL:
-        return m_accel_filter.gotReadings();
+        return m_accel_filter->gotReadings();
       case QT_AGVEL:
-        return m_agvel_filter.gotReadings();
+        return m_agvel_filter->gotReadings();
       case QT_DEPTH:
-        return m_depth_filter.gotReadings();
+        return m_depth_filter->gotReadings();
+      case QT_EDELTA:
+        return m_edelta_filter->gotReadings();
       case QT_EULER:
-        return m_euler_filter.gotReadings();
+        return m_euler_filter->gotReadings();
       default:
         return false;
       }
@@ -467,10 +480,11 @@ namespace DUNE
     void
     Localization::resetAll()
     {
-      m_accel_filter.reset();
-      m_agvel_filter.reset();
-      m_depth_filter.reset();
-      m_euler_filter.reset();
+      m_accel_filter->reset();
+      m_agvel_filter->reset();
+      m_depth_filter->reset();
+      m_edelta_filter->reset();
+      m_euler_filter->reset();
     }
 
     void
@@ -480,13 +494,15 @@ namespace DUNE
       switch (quant)
       {
         case QT_ACCEL:
-          return m_accel_filter.update();
+          return m_accel_filter->update();
         case QT_AGVEL:
-          return m_agvel_filter.update();
+          return m_agvel_filter->update();
         case QT_DEPTH:
-          return m_depth_filter.update();
+          return m_depth_filter->update();
+        case QT_EDELTA:
+          return m_edelta_filter->update();
         case QT_EULER:
-          return m_euler_filter.update();
+          return m_euler_filter->update();
         default:
           return;
       }
