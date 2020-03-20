@@ -302,6 +302,10 @@ namespace DUNE
       void
       consume(const IMC::WaterVelocity* msg);
 
+      template<typename MSGTYPE>
+      bool
+      validDVL(MSGTYPE msg, double& corrected_y);
+
       double
       get(unsigned quant, unsigned ax = 0);
       

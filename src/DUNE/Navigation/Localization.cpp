@@ -350,7 +350,6 @@ namespace DUNE
     Localization::consume(const IMC::GpsFix* msg)
     {
       Concurrency::ScopedRWLock(m_data_lock, true);
-      m_data.gps.hacc = -1.0;
 
       // GpsFix validation.
       m_gps_rej.reason = std::numeric_limits<uint8_t>::max();
@@ -418,56 +417,9 @@ namespace DUNE
         return;
 
       Concurrency::ScopedRWLock(m_data_lock, true);
-      // Correct for the distance between center of gravity and dvl.
-      double y = msg->y - m_dist_dvl_cg * m_data.agvel[AXIS_Z];
-
-      m_dvl_rej.setTimeStamp(msg->getTimeStamp());
-      m_dvl_rej.type = IMC::DvlRejection::TYPE_GV;
-
-      double tstep = m_dvl_gv_tstep.getDelta();
-
-      // Check if we have a valid time delta.
-      if ((tstep > 0) && (tstep < m_dvl_time_rel_thresh))
-      {
-        // Innovation threshold checking in the x-axis.
-        if (std::abs(msg->x - m_data.gvel[AXIS_X]) > m_dvl_rel_thresh[0])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_X;
-          m_dvl_rej.value = std::abs(msg->x - m_data.gvel[AXIS_X]);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-
-        // Innovation threshold checking in the y-axis.
-        if (std::abs(y - m_data.gvel[AXIS_Y]) > m_dvl_rel_thresh[1])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_Y;
-          m_dvl_rej.value = std::abs(y - m_data.gvel[AXIS_Y]);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-      }
-
-      // Absolute filter.
-      if (std::abs(msg->x) > m_dvl_abs_thresh[0])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_X;
-        m_dvl_rej.value = std::abs(msg->x);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
+      double corrected_y;
+      if (!validDVL(msg, corrected_y))
         return;
-      }
-
-      if (std::abs(y) > m_dvl_abs_thresh[1])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_Y;
-        m_dvl_rej.value = std::abs(y);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
-        return;
-      }
 
       // Rever uso da valid flag vs timer
       m_timer[TM_DVL].reset();
@@ -475,7 +427,7 @@ namespace DUNE
 
       // Store accepted msg.
       m_data.gvel[AXIS_X] = msg->x;
-      m_data.gvel[AXIS_Y] = y;
+      m_data.gvel[AXIS_Y] = corrected_y;
     }
 
     void
@@ -485,62 +437,16 @@ namespace DUNE
         return;
       
       Concurrency::ScopedRWLock(m_data_lock, true);
-      double y = msg->y - m_dist_dvl_cg * m_data.agvel[AXIS_Z];
-      
-      m_dvl_rej.setTimeStamp(msg->getTimeStamp());
-      m_dvl_rej.type = IMC::DvlRejection::TYPE_WV;
-
-      double tstep = m_dvl_wv_tstep.getDelta();
-
-      // Check if we have a valid time delta.
-      if ((tstep > 0) && (tstep < m_dvl_time_rel_thresh))
-      {
-        // Innovation threshold checking in the x-axis.
-        if (std::abs(msg->x - m_data.wvel[AXIS_X]) > m_dvl_rel_thresh[0])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_X;
-          m_dvl_rej.value = std::abs(msg->x - m_data.wvel[AXIS_X]);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-
-        // Innovation threshold checking in the y-axis.
-        if (std::abs(y - m_data.wvel[AXIS_Y]) > m_dvl_rel_thresh[1])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_Y;
-          m_dvl_rej.value = std::abs(y - m_data.wvel[AXIS_Y]);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-      }
-
-      // Absolute filter.
-      if (std::abs(msg->x) > m_dvl_abs_thresh[0])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_X;
-        m_dvl_rej.value = std::abs(msg->x);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
+      double corrected_y;
+      if (!validDVL(msg, corrected_y))
         return;
-      }
-
-      if (std::abs(y) > m_dvl_abs_thresh[1])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_Y;
-        m_dvl_rej.value = std::abs(y);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
-        return;
-      }
 
       m_timer[TM_DVL].reset();
       m_valid_wv = true;
 
       // Store accepted msg.
       m_data.wvel[AXIS_X] = msg->x;
-      m_data.wvel[AXIS_Y] = y;
+      m_data.wvel[AXIS_Y] = corrected_y;
     }
 
     void
@@ -554,6 +460,81 @@ namespace DUNE
         m_declination = wmm.declination(lat, lon, height);
         m_declination_defined = true;
       }
+    }
+
+    template<typename MSGTYPE>
+    bool
+    Localization::validDVL(MSGTYPE msg, double& corrected_y)
+    {
+      // TODO: Declare these globally
+      double tstep;
+      double pos[2];
+
+      if (strcmp(msg->getName(), "GroundVelocity"))
+      {
+        tstep = m_dvl_gv_tstep.getDelta();
+        pos[AXIS_X] = m_data.gvel[AXIS_X];
+        pos[AXIS_Y] = m_data.gvel[AXIS_Y];
+      }
+      else if (strcmp(msg->getName(), "WaterVelocity"))
+      {
+        tstep = m_dvl_wv_tstep.getDelta();
+        pos[AXIS_X] = m_data.wvel[AXIS_X];
+        pos[AXIS_Y] = m_data.wvel[AXIS_Y];
+      }
+      else
+      {
+        return false;
+      }
+
+      corrected_y = msg->y - m_dist_dvl_cg * m_data.agvel[AXIS_Z];
+      m_dvl_rej.setTimeStamp(msg->getTimeStamp());
+      m_dvl_rej.type = IMC::DvlRejection::TYPE_WV;
+
+      // Check if we have a valid time delta.
+      if ((tstep > 0) && (tstep < m_dvl_time_rel_thresh))
+      {
+        // Innovation threshold checking in the x-axis.
+        if (std::abs(msg->x - pos[AXIS_X]) > m_dvl_rel_thresh[AXIS_X])
+        {
+          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_X;
+          m_dvl_rej.value = std::abs(msg->x - pos[AXIS_X]);
+          m_dvl_rej.timestep = tstep;
+          dispatch(m_dvl_rej, DF_KEEP_TIME);
+          return false;
+        }
+
+        // Innovation threshold checking in the y-axis.
+        if (std::abs(corrected_y - pos[AXIS_Y]) > m_dvl_rel_thresh[AXIS_Y])
+        {
+          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_Y;
+          m_dvl_rej.value = std::abs(corrected_y - pos[AXIS_Y]);
+          m_dvl_rej.timestep = tstep;
+          dispatch(m_dvl_rej, DF_KEEP_TIME);
+          return false;
+        }
+      }
+
+      // Absolute filter.
+      if (std::abs(msg->x) > m_dvl_abs_thresh[AXIS_X])
+      {
+        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_X;
+        m_dvl_rej.value = std::abs(msg->x);
+        m_dvl_rej.timestep = 0.0;
+        dispatch(m_dvl_rej, DF_KEEP_TIME);
+        return false;
+      }
+
+      if (std::abs(corrected_y) > m_dvl_abs_thresh[AXIS_X])
+      {
+        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_Y;
+        m_dvl_rej.value = std::abs(corrected_y);
+        m_dvl_rej.timestep = 0.0;
+        dispatch(m_dvl_rej, DF_KEEP_TIME);
+        return false;
+      }
+
+      return true;
     }
 
     double
