@@ -100,14 +100,11 @@ namespace DUNE
 
       m_dead_reckoning = false;
       m_aligned = false;
-      m_rpm = 0;
       m_lbl_reading = false;
 
       // Register callbacks.
       bind<IMC::LblConfig>(this);
       bind<IMC::LblRange>(this);
-      bind<IMC::Rpm>(this);
-      bind<IMC::UsblFixExtended>(this);
     }
 
     BasicNavigation::~BasicNavigation(void)
@@ -290,7 +287,7 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::Rpm* msg)
     {
-      m_rpm = msg->value;
+      Localization::consume(msg);
       m_stream_filter.consume(msg);
     }
 
@@ -489,9 +486,9 @@ namespace DUNE
       if (got(QT_EULER))
       {
         IMC::EstimatedState estate;
-        estate.lat = get(QT_GPS_GEO, GEO_LAT);
-        estate.lon = get(QT_GPS_GEO, GEO_LON);
-        estate.height = get(QT_GPS_GEO, GEO_HEI);
+        estate.lat = get(QT_GPS_POS, GEO_LAT);
+        estate.lon = get(QT_GPS_POS, GEO_LON);
+        estate.height = get(QT_GPS_POS, GEO_HEI);
         estate.phi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_X));
         estate.theta = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Y));
         estate.psi = Math::Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
@@ -611,9 +608,9 @@ namespace DUNE
 
       // Earth rotation vector.
       Math::Matrix we(3,1);
-      we(0) = Math::c_earth_rotation * std::cos(get(QT_GPS_GEO, GEO_LAT));
+      we(0) = Math::c_earth_rotation * std::cos(get(QT_GPS_POS, GEO_LAT));
       we(1) = 0.0;
-      we(2) = - Math::c_earth_rotation * std::sin(get(QT_GPS_GEO, GEO_LAT));
+      we(2) = - Math::c_earth_rotation * std::sin(get(QT_GPS_POS, GEO_LAT));
 
       // Sensed angular velocities due to Earth rotation effect.
       Math::Matrix av(3,1);

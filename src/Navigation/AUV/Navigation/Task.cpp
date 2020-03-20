@@ -628,10 +628,10 @@ namespace Navigation
           else if (m_timer[TM_GPS].overflow() && m_timer[TM_DVL].overflow())
           {
             double u = 0.0;
-            double speed_m  = getRpmToMs(m_rpm);
+            double speed_m  = getRpmToMs(get(QT_RPM));
             if(m_args.rpm_estimation)
             {
-              u = m_rpm * m_kal.getState(STATE_K) * std::cos(get(QT_EULER, AXIS_Y));
+              u = get(QT_RPM) * m_kal.getState(STATE_K) * std::cos(get(QT_EULER, AXIS_Y));
               if(m_args.speed_relation_Limit)
               {
                 double speedR = (std::abs(u) - std::abs(speed_m))/ std::abs(speed_m) * 100;
@@ -777,8 +777,8 @@ namespace Navigation
 
           if (m_timer[TM_DVL].overflow() && m_timer[TM_GPS].overflow())
           {
-            A(STATE_X, STATE_K) = m_rpm * std::cos(yaw) * std::cos(theta);
-            A(STATE_Y, STATE_K) = m_rpm * std::sin(yaw) * std::cos(theta);
+            A(STATE_X, STATE_K) = get(QT_RPM) * std::cos(yaw) * std::cos(theta);
+            A(STATE_Y, STATE_K) = get(QT_RPM) * std::sin(yaw) * std::cos(theta);
           }
           else
           {

@@ -135,6 +135,8 @@ namespace DUNE
       bind<IMC::EulerAnglesDelta>(this);
       bind<IMC::GpsFix>(this);
       bind<IMC::GroundVelocity>(this);
+      bind<IMC::Rpm>(this);
+      bind<IMC::UsblFixExtended>(this);
       bind<IMC::WaterVelocity>(this);
     }
 
@@ -405,9 +407,9 @@ namespace DUNE
       // Check current declination value.
       checkDeclination(msg->lat, msg->lon, msg->height);
 
-      m_data.gps.geo[GEO_LAT] = msg->lat;
-      m_data.gps.geo[GEO_LON] = msg->lon;
-      m_data.gps.geo[GEO_HEI] = msg->height;
+      m_data.gps.pos[GEO_LAT] = msg->lat;
+      m_data.gps.pos[GEO_LON] = msg->lon;
+      m_data.gps.pos[GEO_HEI] = msg->height;
     }
 
     void
@@ -428,6 +430,26 @@ namespace DUNE
       // Store accepted msg.
       m_data.gvel[AXIS_X] = msg->x;
       m_data.gvel[AXIS_Y] = corrected_y;
+    }
+
+    void
+    Localization::consume(const IMC::Rpm* msg)
+    {
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_data.rpm = msg->value;
+    }
+
+    void
+    Localization::consume(const IMC::UsblFixExtended* msg)
+    {
+      if (msg->target != getSystemName())
+        return;
+
+      Concurrency::ScopedRWLock(m_data_lock, true);
+      m_data.usbl[GEO_LAT] = msg->lat;
+      m_data.usbl[GEO_LON] = msg->lon;
+      m_data.usbl[GEO_HEI] = msg->z;
+      m_data.usbl_acc = msg->accuracy;
     }
 
     void
@@ -577,8 +599,8 @@ namespace DUNE
           return m_data.edelta_ts;
         case QT_EULER:
           return m_data.euler[ax];
-        case QT_GPS_GEO:
-          return m_data.gps.geo[ax];
+        case QT_GPS_POS:
+          return m_data.gps.pos[ax];
         case QT_GPS_SOG:
           return m_data.gps.sog;
         case QT_GPS_HACC:
@@ -587,6 +609,8 @@ namespace DUNE
           return m_data.gps.hdop;
         case QT_GRVEL:
           return m_data.gvel[ax];
+        case QT_RPM:
+          return m_data.rpm;
         case QT_WTVEL:
           return m_data.wvel[ax];
         default:

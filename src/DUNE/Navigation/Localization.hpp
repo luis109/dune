@@ -161,7 +161,6 @@ namespace DUNE
       QT_DEPTH_OFFSET,
       QT_RPM,
       QT_GPS_POS,
-      QT_GPS_GEO,
       QT_GPS_SOG,
       QT_GPS_HACC,
       QT_GPS_HDOP,
@@ -197,53 +196,57 @@ namespace DUNE
     struct Data
     {
       //! Localization information
-      std::array<double, 3> accel;
+      // Angular information
       std::array<double, 3> agvel;
       std::array<double, 3> euler;
       std::array<double, 3> edelta;
       double edelta_ts;
 
+      // Z
+      double altitude;
       std::array<double, 1> depth;
       double depth_offset;
-
-      double altitude;
-      double rpm;
 
       // GPS
       struct
       {
         std::array<double, 3> pos;
-        std::array<double, 3> geo;
         double sog;
         double hacc;
         double hdop;
       }gps;
 
-      std::array<double, 6> usbl;
+      // USBL
+      std::array<double, 3> usbl;
+      double usbl_acc;
+
+      // Velocity
+      std::array<double, 3> accel;
+      double rpm;
       std::array<double, 2> gvel;
       std::array<double, 2> wvel;
 
       void
       reset()
       {
-        accel.fill(0.0);
         agvel.fill(0.0);
         euler.fill(0.0);
         edelta.fill(0.0);
-        depth.fill(0.0);
-
         edelta_ts = 0.1;
-        depth_offset = 0.0;
+
         altitude = -1.0;
-        rpm = 0.0;
+        depth.fill(0.0);
+        depth_offset = 0.0;
 
         gps.pos.fill(0.0);
-        gps.geo.fill(0.0);
         gps.sog = 0.0;
         gps.hacc = 0.0;
         gps.hdop = 0.0;
+
         usbl.fill(0.0);
 
+        accel.fill(0.0);
+        rpm = 0.0;
         gvel.fill(0.0);
         wvel.fill(0.0);
       }
@@ -298,6 +301,12 @@ namespace DUNE
 
       void
       consume(const IMC::GroundVelocity* msg);
+
+      void
+      consume(const IMC::Rpm* msg);
+
+      void
+      consume(const IMC::UsblFixExtended* msg);
 
       void
       consume(const IMC::WaterVelocity* msg);
