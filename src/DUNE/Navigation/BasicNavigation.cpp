@@ -103,21 +103,11 @@ namespace DUNE
       m_rpm = 0;
       m_lbl_reading = false;
 
-      m_gvel_val_bits = IMC::GroundVelocity::VAL_VEL_X
-                        | IMC::GroundVelocity::VAL_VEL_Y
-                        | IMC::GroundVelocity::VAL_VEL_Z;
-
-      m_wvel_val_bits = IMC::WaterVelocity::VAL_VEL_X
-                        | IMC::WaterVelocity::VAL_VEL_Y
-                        | IMC::WaterVelocity::VAL_VEL_Z;
-
       // Register callbacks.
-      bind<IMC::GroundVelocity>(this);
       bind<IMC::LblConfig>(this);
       bind<IMC::LblRange>(this);
       bind<IMC::Rpm>(this);
       bind<IMC::UsblFixExtended>(this);
-      bind<IMC::WaterVelocity>(this);
     }
 
     BasicNavigation::~BasicNavigation(void)
@@ -236,72 +226,6 @@ namespace DUNE
     }
 
     void
-    BasicNavigation::consume(const IMC::GroundVelocity* msg)
-    {
-      m_gvel = *msg;
-      // Correct for the distance between center of gravity and dvl.
-      m_gvel.y = msg->y - m_dist_dvl_cg * get(QT_AGVEL, AXIS_Z);
-
-      if (msg->validity != m_gvel_val_bits)
-        return;
-
-      m_dvl_rej.setTimeStamp(msg->getTimeStamp());
-      m_dvl_rej.type = IMC::DvlRejection::TYPE_GV;
-
-      double tstep = m_dvl_gv_tstep.getDelta();
-
-      // Check if we have a valid time delta.
-      if ((tstep > 0) && (tstep < m_dvl_time_rel_thresh))
-      {
-        // Innovation threshold checking in the x-axis.
-        if (std::abs(m_gvel.x - m_gvel_previous.x) > m_dvl_rel_thresh[0])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_X;
-          m_dvl_rej.value = std::abs(m_gvel.x - m_gvel_previous.x);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-
-        // Innovation threshold checking in the y-axis.
-        if (std::abs(m_gvel.y - m_gvel_previous.y) > m_dvl_rel_thresh[1])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_Y;
-          m_dvl_rej.value = std::abs(m_gvel.y - m_gvel_previous.y);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-      }
-
-      // Absolute filter.
-      if (std::abs(m_gvel.x) > m_dvl_abs_thresh[0])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_X;
-        m_dvl_rej.value = std::abs(m_gvel.x);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
-        return;
-      }
-
-      if (std::abs(m_gvel.y) > m_dvl_abs_thresh[1])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_Y;
-        m_dvl_rej.value = std::abs(m_gvel.y);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
-        return;
-      }
-
-      m_timer[TM_DVL].reset();
-      m_valid_gv = true;
-
-      // Store accepted msg.
-      m_gvel_previous = *msg;
-      m_gvel_previous.y = m_gvel.y;
-    }
-
-    void
     BasicNavigation::consume(const IMC::LblConfig* msg)
     {
       if (msg->op != IMC::LblConfig::OP_SET_CFG)
@@ -383,72 +307,6 @@ namespace DUNE
                                        &x, &y);
 
       runKalmanUSBL(x, y);
-    }
-
-    void
-    BasicNavigation::consume(const IMC::WaterVelocity* msg)
-    {
-      m_wvel = *msg;
-      // Correct for the distance between center of gravity and dvl.
-      m_wvel.y = msg->y - m_dist_dvl_cg * get(QT_AGVEL, AXIS_Z);
-
-      if (msg->validity != m_wvel_val_bits)
-        return;
-
-      m_dvl_rej.setTimeStamp(msg->getTimeStamp());
-      m_dvl_rej.type = IMC::DvlRejection::TYPE_WV;
-
-      double tstep = m_dvl_wv_tstep.getDelta();
-
-      // Check if we have a valid time delta.
-      if ((tstep > 0) && (tstep < m_dvl_time_rel_thresh))
-      {
-        // Innovation threshold checking in the x-axis.
-        if (std::abs(m_wvel.x - m_wvel_previous.x) > m_dvl_rel_thresh[0])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_X;
-          m_dvl_rej.value = std::abs(m_wvel.x - m_wvel_previous.x);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-
-        // Innovation threshold checking in the y-axis.
-        if (std::abs(m_wvel.y - m_wvel_previous.y) > m_dvl_rel_thresh[1])
-        {
-          m_dvl_rej.reason = IMC::DvlRejection::RR_INNOV_THRESHOLD_Y;
-          m_dvl_rej.value = std::abs(m_wvel.y - m_wvel_previous.y);
-          m_dvl_rej.timestep = tstep;
-          dispatch(m_dvl_rej, DF_KEEP_TIME);
-          return;
-        }
-      }
-
-      // Absolute filter.
-      if (std::abs(m_wvel.x) > m_dvl_abs_thresh[0])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_X;
-        m_dvl_rej.value = std::abs(m_wvel.x);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
-        return;
-      }
-
-      if (std::abs(m_wvel.y) > m_dvl_abs_thresh[1])
-      {
-        m_dvl_rej.reason = IMC::DvlRejection::RR_ABS_THRESHOLD_Y;
-        m_dvl_rej.value = std::abs(m_wvel.y);
-        m_dvl_rej.timestep = 0.0;
-        dispatch(m_dvl_rej, DF_KEEP_TIME);
-        return;
-      }
-
-      m_timer[TM_DVL].reset();
-      m_valid_wv = true;
-
-      // Store accepted msg.
-      m_wvel_previous = *msg;
-      m_wvel_previous.y = m_wvel.y;
     }
 
     void
@@ -580,13 +438,13 @@ namespace DUNE
 
       if (m_valid_gv)
       {
-        m_kal.setOutput(u, m_gvel.x);
-        m_kal.setOutput(v, m_gvel.y);
+        m_kal.setOutput(u, get(QT_GRVEL, AXIS_X));
+        m_kal.setOutput(v, get(QT_GRVEL, AXIS_Y));
       }
       else if (m_valid_wv)
       {
-        m_kal.setOutput(u, m_wvel.x);
-        m_kal.setOutput(v, m_wvel.y);
+        m_kal.setOutput(u, get(QT_WTVEL, AXIS_X));
+        m_kal.setOutput(v, get(QT_WTVEL, AXIS_Y));
       }
     }
 

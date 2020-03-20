@@ -113,9 +113,6 @@ namespace DUNE
       consume(const IMC::GpsFix* msg);
 
       void
-      consume(const IMC::GroundVelocity* msg);
-
-      void
       consume(const IMC::LblConfig* msg);
 
       void
@@ -126,9 +123,6 @@ namespace DUNE
 
       void
       consume(const IMC::UsblFixExtended* msg);
-
-      void
-      consume(const IMC::WaterVelocity* msg);
 
     protected:
 
@@ -290,16 +284,10 @@ namespace DUNE
       IMC::EstimatedState m_estate;
       //! LBL range acceptance.
       IMC::LblRangeAcceptance m_lbl_ac;
-      //! DVL measurement rejection.
-      IMC::DvlRejection m_dvl_rej;
       //! Navigation Uncertainty log.
       IMC::NavigationUncertainty m_uncertainty;
       //! Navigation Data log.
       IMC::NavigationData m_navdata;
-      //! Current velocity relative to ground message.
-      IMC::GroundVelocity m_gvel;
-      //! Current velocity relative to the water message.
-      IMC::WaterVelocity m_wvel;
       //! Vertical displacement in the NED frame to the origin height above ellipsoid
       double m_last_z;
       //! Dead reckoning mode.
@@ -310,10 +298,6 @@ namespace DUNE
       float m_lbl_threshold;
       //! Heading value (rad).
       double m_heading;
-      //! Received valid ground velocity message.
-      bool m_valid_gv;
-      //! Received valid water velocity message.
-      bool m_valid_wv;
       //! Received LBL fix.
       bool m_lbl_reading;
       //! Derivative for heave.
@@ -347,10 +331,6 @@ namespace DUNE
       float m_max_dis2ref;
       //! Horizontal position variance threshold value.
       float m_max_hpos_var;
-      //! Previous velocity relative to ground message measurement.
-      IMC::GroundVelocity m_gvel_previous;
-      //! Previous velocity relative to water message measurement.
-      IMC::WaterVelocity m_wvel_previous;
       //! Navigation Startup point.
       IMC::GpsFix* m_origin;
       //! Displacement between LBL and GPS.
@@ -361,21 +341,12 @@ namespace DUNE
       bool m_depth_sensor;
       //! LBL rejection constants.
       std::vector<float> m_lbl_reject_constants;
-      //! Timestep between consecutive valid ground velocity messages.
-      Time::Delta m_dvl_gv_tstep;
-      //! Timestep between consecutive valid water velocity messages.
-      Time::Delta m_dvl_wv_tstep;
       //! GPS disable for debug
       bool m_gps_disable;
       //! Moving Average for heave.
       Math::MovingAverage<double>* m_avg_heave;
       //! Number of samples to average heave.
       unsigned m_avg_heave_samples;
-      // bool m_use_declination;
-      //! DVL ground velocity validation bits.
-      uint8_t m_gvel_val_bits;
-      //! DVL water velocity validation bits.
-      uint8_t m_wvel_val_bits;
     };
   }
 }

@@ -296,6 +296,12 @@ namespace DUNE
       virtual void
       consume(const IMC::GpsFix* msg);
 
+      void
+      consume(const IMC::GroundVelocity* msg);
+
+      void
+      consume(const IMC::WaterVelocity* msg);
+
       double
       get(unsigned quant, unsigned ax = 0);
       
@@ -383,6 +389,22 @@ namespace DUNE
 
       //! Altitutde sanity
       bool m_sane;
+
+      //! DVL
+      //! Received valid ground velocity message.
+      bool m_valid_gv;
+      //! Received valid water velocity message.
+      bool m_valid_wv;
+      //! DVL ground velocity validation bits.
+      uint8_t m_gvel_val_bits;
+      //! DVL water velocity validation bits.
+      uint8_t m_wvel_val_bits;
+      //! DVL measurement rejection.
+      IMC::DvlRejection m_dvl_rej;
+      //! Timestep between consecutive valid ground velocity messages.
+      Time::Delta m_dvl_gv_tstep;
+      //! Timestep between consecutive valid water velocity messages.
+      Time::Delta m_dvl_wv_tstep;
 
     private:
       //! Data
