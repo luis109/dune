@@ -39,6 +39,7 @@
 #include <DUNE/Coordinates/WGS84.hpp>
 #include <DUNE/Coordinates/WMM.hpp>
 #include <DUNE/IMC/Definitions.hpp>
+#include <DUNE/IMC/Macros.hpp>
 #include <DUNE/Memory.hpp>
 #include <DUNE/Math/Angles.hpp>
 #include <DUNE/Math/Derivative.hpp>
@@ -311,9 +312,8 @@ namespace DUNE
       void
       consume(const IMC::WaterVelocity* msg);
 
-      template<typename MSGTYPE>
       bool
-      validDVL(MSGTYPE msg, double& corrected_y);
+      validDVL(const IMC::Message* msg, std::array<double, 2>& new_pos);
 
       double
       get(unsigned quant, unsigned ax = 0);
@@ -408,10 +408,8 @@ namespace DUNE
       bool m_valid_gv;
       //! Received valid water velocity message.
       bool m_valid_wv;
-      //! DVL ground velocity validation bits.
-      uint8_t m_gvel_val_bits;
-      //! DVL water velocity validation bits.
-      uint8_t m_wvel_val_bits;
+      //! DVL velocity validation bits.
+      uint8_t m_dvl_val_bits;
       //! DVL measurement rejection.
       IMC::DvlRejection m_dvl_rej;
       //! Timestep between consecutive valid ground velocity messages.
