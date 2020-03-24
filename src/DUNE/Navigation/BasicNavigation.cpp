@@ -326,18 +326,16 @@ namespace DUNE
     void
     BasicNavigation::reset(void)
     {
+      Localization::reset();
+      Localization::resetFilters();
       m_last_z = 0.0;
-
       m_heading = 0.0;
-      resetAltitude();
 
       m_navstate = SM_STATE_IDLE;
       setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_WAIT_GPS_FIX);
 
       m_valid_gv = false;
       m_valid_wv = false;
-
-      resetFilters();
     }
 
     bool
