@@ -142,7 +142,7 @@ namespace DUNE
       reset();
 
       // Timer setup
-      for (size_t i = 0; i < NUM_TIMER - 1; ++i)
+      for (size_t i = 0; i < NUM_TIMER; ++i)
         m_timer[i].setTop(m_time_thresh[i]);
 
       m_avg_gps = new Math::MovingAverage<double>(m_avg_gps_samples);
@@ -169,10 +169,6 @@ namespace DUNE
           m_entity_id[i] = std::numeric_limits<unsigned>::max();
         }
       }
-
-      // Set timers
-      for (size_t i = 0; i < NUM_TIMER - 1; ++i)
-        m_timer[i].setTop(m_time_thresh[i]);
 
       if (m_ctx.profiles.isSelected("Simulation"))
         m_entity_id[DEV_ALT] = resolveEntity(m_elabel_alt_sim);
@@ -348,7 +344,6 @@ namespace DUNE
     Localization::consume(const IMC::GpsFix* msg)
     {
       Concurrency::ScopedRWLock(m_data_lock, true);
-      m_data.gps.hacc = -1.0;
 
       // GpsFix validation.
       m_gps_rej.reason = std::numeric_limits<uint8_t>::max();
