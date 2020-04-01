@@ -194,6 +194,10 @@ namespace Navigation
         //! Debug entities
         int m_psi_bias_cov;
         int m_psi_diff;
+        int m_gps_state;
+        int m_dead_reck;
+        int m_align_dbg;
+        int m_head_bfr;
 
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Navigation::BasicNavigation(name, ctx),
@@ -365,6 +369,10 @@ namespace Navigation
         {
           m_psi_bias_cov = reserveEntity(String::str("%s.psi_bias_cov", getEntityLabel()));
           m_psi_diff = reserveEntity(String::str("%s.psi_diff", getEntityLabel()));
+          m_gps_state = reserveEntity(String::str("%s.gps_state", getEntityLabel()));
+          m_dead_reck = reserveEntity(String::str("%s.dead_reckoning", getEntityLabel()));
+          m_align_dbg = reserveEntity(String::str("%s.alignment", getEntityLabel()));
+          m_head_bfr = reserveEntity(String::str("%s.heading_buffer", getEntityLabel()));
         }
 
         void
@@ -729,8 +737,6 @@ namespace Navigation
                   war(DTR("navigation not aligned - Automatic IMU poweroff"));
                   m_aligned  = false;
                   m_heading_buffer=0;
-
-                  debug("Navigation not aligned");
                 }
               }
             }
@@ -748,6 +754,11 @@ namespace Navigation
           m_valid_gv = false;
           m_valid_wv = false;
           resetKalman();
+
+          debug(m_gps_state, gpsDisable());
+          debug(m_dead_reck, m_dead_reckoning);
+          debug(m_align_dbg, m_aligned);
+          debug(m_head_bfr, m_heading_buffer);
         }
 
         void
@@ -760,6 +771,8 @@ namespace Navigation
           msg.name = m_args.elabel_imu ;
           msg.params.push_back(p);
           dispatch(msg);
+
+          debug("navigation not aligned - sendDeActiveIMU");
         }
 
         void
