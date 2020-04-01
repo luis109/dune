@@ -52,7 +52,7 @@ namespace Transports
         // Arguments
         Arguments m_args;
         // Port bind retries.
-        static const int c_port_retries = 5;
+        static const int c_port_retries = 100;
         // Server socket handle.
         TCPSocket* m_sock;
         // I/O selector.

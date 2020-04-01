@@ -89,7 +89,7 @@ namespace Transports
     // Internal buffer size.
     static const int c_bfr_size = 65535;
     // Port bind retries.
-    static const int c_port_retries = 5;
+    static const int c_port_retries = 100;
 
     struct Task: public DUNE::Tasks::Task
     {
