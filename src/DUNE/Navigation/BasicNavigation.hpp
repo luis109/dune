@@ -129,7 +129,7 @@ namespace DUNE
       //! Get heading rate value.
       //! @return heading rate.
       inline double
-      getHeadingRate(void)
+      getHeadingRate(bool use_imu)
       {
         double pitch = get(QT_EULER, AXIS_Y);
 
@@ -140,7 +140,7 @@ namespace DUNE
         double roll = get(QT_EULER, AXIS_X);
         double p, q, r;
 
-        if (m_dead_reckoning)
+        if (use_imu)
         {
           if (!gotReadings(QT_EDELTA))
             return 0.0;
@@ -296,6 +296,8 @@ namespace DUNE
       float m_lbl_threshold;
       //! Heading value (rad).
       double m_heading;
+      //! Heading value of IMU (rad).
+      double m_heading_imu;
       //! Received LBL fix.
       bool m_lbl_reading;
       //! Derivative for heave.
