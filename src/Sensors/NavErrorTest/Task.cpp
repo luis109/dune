@@ -48,11 +48,13 @@ namespace Sensors
       IMC::GpsFix m_last_gps;
       IMC::EstimatedState m_last_state;
       Time::Delta m_delta;
+      bool m_aligned;
 
       /*************************/
       /* Euler message holders */
+      double m_integrated;
       IMC::Distance m_distance;
-      IMC::Distance m_integrated;
+      IMC::Distance m_intavg_dist;
       IMC::Distance m_mavg_dist;
 
       /**************************/
@@ -79,7 +81,7 @@ namespace Sensors
       onEntityReservation(void)
       {
         m_distance.setSourceEntity(reserveEntity(String::str("%s.distance", getEntityLabel())));
-        m_integrated.setSourceEntity(reserveEntity(String::str("%s.integration", getEntityLabel())));
+        m_intavg_dist.setSourceEntity(reserveEntity(String::str("%s.integration", getEntityLabel())));
         m_mavg_dist.setSourceEntity(reserveEntity(String::str("%s.average", getEntityLabel())));
       }
 
@@ -101,11 +103,14 @@ namespace Sensors
       void
       onResourceAcquisition(void)
       {
+        m_aligned = false;
+
         m_num_gps = 0;
         m_num_estate = 0;
 
+        m_integrated = 0;
         m_distance.value = 0;
-        m_integrated.value = 0;
+        m_intavg_dist.value = 0;
       }
 
       void
@@ -115,6 +120,9 @@ namespace Sensors
           return;
 
         if (msg->getSourceEntity() != m_nav_eid)
+          return;
+
+        if (!m_aligned)
           return;
 
         m_last_state = *msg;
@@ -127,16 +135,17 @@ namespace Sensors
                                             m_last_gps.lat, 
                                             m_last_gps.lon, 
                                             m_last_gps.height);
-        m_integrated.value += m_distance.value;
+        m_integrated += m_distance.value;
+        m_intavg_dist.value = m_integrated / (double)m_num_estate;
         m_mavg_dist.value = m_average.update(m_distance.value);
 
 
         m_distance.setTimeStamp();
-        m_integrated.setTimeStamp(m_distance.getTimeStamp());
+        m_intavg_dist.setTimeStamp(m_distance.getTimeStamp());
         m_mavg_dist.setTimeStamp(m_distance.getTimeStamp());
 
         dispatch(m_distance, DF_KEEP_TIME);
-        dispatch(m_integrated, DF_KEEP_TIME);
+        dispatch(m_intavg_dist, DF_KEEP_TIME);
         dispatch(m_mavg_dist, DF_KEEP_TIME);
       }
 
