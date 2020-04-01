@@ -188,6 +188,13 @@ namespace Navigation
         //! Pointer to speed model for speed conversions
         const Plans::SpeedModel* m_speed_model;
 
+        //! Debug messages
+        IMC::DevDataText m_str_dbg;
+        IMC::Temperature m_val_dbg;
+        //! Debug entities
+        int m_psi_bias_cov;
+        int m_psi_diff;
+
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Navigation::BasicNavigation(name, ctx),
           m_avg_speed(NULL)
@@ -351,6 +358,13 @@ namespace Navigation
           BasicNavigation::onResourceRelease();
           Memory::clear(m_avg_speed);
           Memory::clear(m_speed_model);
+        }
+
+        void
+        onEntityReservation(void)
+        {
+          m_psi_bias_cov = reserveEntity(String::str("%s.psi_bias_cov", getEntityLabel()));
+          m_psi_diff = reserveEntity(String::str("%s.psi_diff", getEntityLabel()));
         }
 
         void
@@ -691,11 +705,18 @@ namespace Navigation
 
           if (m_dead_reckoning)
           {
+            debug(m_psi_bias_cov, m_kal.getCovariance(STATE_PSI_BIAS));
+            debug(m_psi_diff, Angles::degrees(diff_psi));
+
             if (m_kal.getCovariance(STATE_PSI_BIAS) < m_args.alignment_index &&
                 diff_psi < Angles::normalizeRadian(Angles::radians(m_args.alignment_diff)) )
             {
-                m_aligned = true;
-                m_heading_buffer=0;
+              // Tests
+              if (!m_aligned)
+                debug("GPS disabled");
+            
+              m_aligned = true;
+              m_heading_buffer=0;
             }
             else
             {
@@ -708,6 +729,8 @@ namespace Navigation
                   war(DTR("navigation not aligned - Automatic IMU poweroff"));
                   m_aligned  = false;
                   m_heading_buffer=0;
+
+                  debug("Navigation not aligned");
                 }
               }
             }
@@ -838,6 +861,21 @@ namespace Navigation
 
           double ang = m_estate.psi - Angles::normalizeRadian(getEuler(AXIS_Z));
           m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(ang));
+        }
+
+        void
+        debug(std::string str)
+        {
+          m_str_dbg.value = str;
+          dispatch(m_str_dbg);
+        }
+
+        void
+        debug(int ent, double val)
+        {
+          m_val_dbg.setSourceEntity(ent);
+          m_val_dbg.value = val;
+          dispatch(m_val_dbg);
         }
       };
     }
