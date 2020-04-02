@@ -32,6 +32,7 @@
 #include <vector>
 #include <map>
 #include <fstream>
+#include <csignal>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -289,6 +290,13 @@ namespace Transports
           lc->name = lc->name.substr(spos + 1);
         lc->name += "_replay";
 
+        // Test Number
+        std::string test_num;
+        m_ctx.config.get("Sensors.NavErrorTest", 
+                          "Test Number", "NULL", test_num);
+        if (test_num != "NULL")
+          lc->name += "_" + test_num;
+
         lc->op = IMC::LoggingControl::COP_REQUEST_START;
         dispatch(lc); // change log (if Logging task happens to be active)
 
@@ -352,6 +360,11 @@ namespace Transports
         lc.op = IMC::LoggingControl::COP_REQUEST_START;
         lc.name = "idle";
         dispatch(lc);
+
+        //DANGEROUS BABY!!!!!!!!!!!!!!!!!!!!
+        // std::exit(0);
+        // inf("Stop in Replay: %f", Time::Clock::get());
+        std::raise(SIGINT);
       }
 
       void

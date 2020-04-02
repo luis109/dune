@@ -27,8 +27,12 @@
 // Author: Luis Venâncio                                                    *
 //***************************************************************************
 
+// Standard headers
+#include <csignal>
+
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <DUNE/Parsers/Exceptions.hpp>
 
 namespace Sensors
 {
@@ -47,7 +51,9 @@ namespace Sensors
       unsigned m_gps_eid;
       IMC::GpsFix m_last_gps;
       IMC::EstimatedState m_last_state;
-      Time::Delta m_delta;
+      unsigned m_test_num;
+      std::string m_dat_path;
+      bool m_valid;
       bool m_aligned;
 
       /*************************/
@@ -72,8 +78,17 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx)
       {
+        param("Test Number", m_test_num)
+        .defaultValue("0")
+        .description("Test number");
+
+        param("Path To Data Folder", m_dat_path)
+        .defaultValue("")
+        .description("Path to output data folder");
+
         bind<IMC::EstimatedState>(this);
         bind<IMC::GpsFix>(this);
+        bind<IMC::DevDataText>(this);
       }
 
       //! Reserve entity identifiers.
@@ -103,6 +118,7 @@ namespace Sensors
       void
       onResourceAcquisition(void)
       {
+        m_valid = true;
         m_aligned = false;
 
         m_num_gps = 0;
@@ -111,6 +127,28 @@ namespace Sensors
         m_integrated = 0;
         m_distance.value = 0;
         m_intavg_dist.value = 0;
+      }
+
+      void
+      consume(const IMC::DevDataText* msg)
+      {
+        if (msg->getSourceEntity() != m_nav_eid)
+          return;
+
+        if (String::startsWith(msg->value, "GPS disabled"))
+        {
+          m_aligned = true;
+          return;
+        }
+
+        if (!String::startsWith(msg->value, "shutdown"))
+          return;
+
+        // inf("Stop in NavErrorTest: %f", Time::Clock::get());
+        m_valid = false;
+        inf("%s", msg->value.c_str());
+        inf("%s", m_ctx.config.files().back().c_str());
+        std::raise(SIGINT);
       }
 
       void
@@ -169,6 +207,27 @@ namespace Sensors
         ++m_num_gps;
       }
 
+      void
+      outResult()
+      {
+        std::vector<double> param;
+        std::string file_name = "test_" + String::str(m_test_num) + ".dat";
+        std::string file_path = m_dat_path + "/" + file_name;
+        std::FILE* fd = std::fopen(file_path.c_str(), "w+");
+
+        if (!m_valid)
+          m_intavg_dist.value = -1;
+        
+        m_ctx.config.get("Navigation.AUV.Navigation", 
+                          "Heading Noise Covariance with IMU", 
+                          "0, 0", param);
+
+        if (fd == 0)
+          throw FileOpenError(file_name, System::Error::getLastMessage());
+        else
+          fprintf(fd, "%d %e %e %f\n", m_test_num, param[0], param[1], m_intavg_dist.value);
+      }
+
       //! Main loop.
       void
       onMain(void)
@@ -177,6 +236,8 @@ namespace Sensors
         {
           waitForMessages(1.0);
         }
+        
+        outResult();
       }
     };
   }

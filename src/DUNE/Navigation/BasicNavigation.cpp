@@ -259,6 +259,8 @@ namespace DUNE
     void
     BasicNavigation::onUpdateParameters(void)
     {
+      m_gps_disable = true;
+      
       // Initialize timers.
       m_time_without_gps.setTop(m_without_gps_timeout);
       m_time_without_dvl.setTop(m_without_dvl_timeout);
@@ -578,9 +580,18 @@ namespace DUNE
       // Not sure about altitude.
       double x = 0.0;
       double y = 0.0;
-      Coordinates::WGS84::displacement(m_origin->lat, m_origin->lon, m_origin->height,
+      try
+      {
+        Coordinates::WGS84::displacement(m_origin->lat, m_origin->lon, m_origin->height,
                                        msg->lat, msg->lon, msg->height,
                                        &x, &y, &m_last_z);
+      }
+      catch(...)
+      {
+        IMC::DevDataText shutdown;
+        shutdown.value = "shutdown: Coordinates basic navigation";
+        dispatch(shutdown);
+      }
 
       // Stream Estimator.
       IMC::EstimatedStreamVelocity stream;

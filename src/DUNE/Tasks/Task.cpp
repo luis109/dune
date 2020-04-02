@@ -382,6 +382,11 @@ namespace DUNE
         }
         catch (RestartNeeded& e)
         {
+          //Debug
+          IMC::DevDataText shutdown;
+          shutdown.value = "shutdown: restart";
+          dispatch(shutdown);
+
           unsigned delay = e.getDelay();
 
           if (e.isError())
@@ -412,7 +417,12 @@ namespace DUNE
           }
         }
         catch (std::exception& e)
-        {
+        {       
+          //Debug
+          IMC::DevDataText shutdown;
+          shutdown.value = "shutdown: uncaught";
+          dispatch(shutdown);
+
           IMC::EntityState estate;
           setEntityState(IMC::EntityState::ESTA_FAILURE, e.what());
           dispatch(estate);

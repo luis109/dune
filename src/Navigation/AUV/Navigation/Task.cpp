@@ -448,6 +448,7 @@ namespace Navigation
             m_dead_reckoning = false;
             m_aligned = false;
             debug("navigation not aligned");
+            debugmsg("shutdown: navigation not aligned - imuDeActivateDeadReckoning");
 
             m_kal.setState(STATE_PSI_BIAS, 0.0);
 
@@ -713,15 +714,15 @@ namespace Navigation
 
           if (m_dead_reckoning)
           {
-            debug(m_psi_bias_cov, m_kal.getCovariance(STATE_PSI_BIAS));
-            debug(m_psi_diff, Angles::degrees(diff_psi));
+            debugmsg(m_psi_bias_cov, m_kal.getCovariance(STATE_PSI_BIAS));
+            debugmsg(m_psi_diff, Angles::degrees(diff_psi));
 
             if (m_kal.getCovariance(STATE_PSI_BIAS) < m_args.alignment_index &&
                 diff_psi < Angles::normalizeRadian(Angles::radians(m_args.alignment_diff)) )
             {
               // Tests
               if (!m_aligned)
-                debug("GPS disabled");
+                debugmsg("GPS disabled");
             
               m_aligned = true;
               m_heading_buffer=0;
@@ -733,8 +734,8 @@ namespace Navigation
                 m_heading_buffer++;
                 if(m_heading_buffer > m_args.heading_buffer_value)
                 {
-                  sendDeActiveIMU();
                   war(DTR("navigation not aligned - Automatic IMU poweroff"));
+                  sendDeActiveIMU();
                   m_aligned  = false;
                   m_heading_buffer=0;
                 }
@@ -755,10 +756,10 @@ namespace Navigation
           m_valid_wv = false;
           resetKalman();
 
-          debug(m_gps_state, gpsDisable());
-          debug(m_dead_reck, m_dead_reckoning);
-          debug(m_align_dbg, m_aligned);
-          debug(m_head_bfr, m_heading_buffer);
+          debugmsg(m_gps_state, gpsDisable());
+          debugmsg(m_dead_reck, m_dead_reckoning);
+          debugmsg(m_align_dbg, m_aligned);
+          debugmsg(m_head_bfr, m_heading_buffer);
         }
 
         void
@@ -772,7 +773,7 @@ namespace Navigation
           msg.params.push_back(p);
           dispatch(msg);
 
-          debug("navigation not aligned - sendDeActiveIMU");
+          debugmsg("shutdown: navigation not aligned - sendDeActiveIMU");
         }
 
         void
@@ -793,9 +794,17 @@ namespace Navigation
         double
         getRpmToMs(double rpm)
         {
-          if(m_speed_model != NULL)
-          return m_speed_model->toMPS(rpm,IMC::SUNITS_RPM);
-        return m_args.rpm_ini*rpm;
+          try
+          {
+            if(m_speed_model != NULL)
+              return m_speed_model->toMPS(rpm,IMC::SUNITS_RPM);
+          }
+          catch(...)
+          {
+            debugmsg("shutdown: speed model problem");
+          }
+
+          return m_args.rpm_ini*rpm;
         }
 
         // Reinitialize Extended Kalman Filter transition matrix function.
@@ -877,14 +886,14 @@ namespace Navigation
         }
 
         void
-        debug(std::string str)
+        debugmsg(std::string str)
         {
           m_str_dbg.value = str;
           dispatch(m_str_dbg);
         }
 
         void
-        debug(int ent, double val)
+        debugmsg(int ent, double val)
         {
           m_val_dbg.setSourceEntity(ent);
           m_val_dbg.value = val;
