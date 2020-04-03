@@ -1,4 +1,0 @@
-/home/luis/Downloads/logs/logs_navega_2/lauv-noptilus-3/20200212/113152_navigation_test_cclw/Data.lsf
-/home/luis/Downloads/logs/logs_navega_2/lauv-noptilus-3/20200212/153126_navigation_test_clw/Data.lsf
-/home/luis/Downloads/logs/logs_navega_2/lauv-noptilus-3/20200212/141915_navigation_test_cclw/Data.lsf
-/home/luis/Downloads/logs/logs_navega/lauv-noptilus-3/20190809/161736_test_nav_np3/Data.lsf
