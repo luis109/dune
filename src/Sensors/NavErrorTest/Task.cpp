@@ -53,6 +53,7 @@ namespace Sensors
       IMC::EstimatedState m_last_state;
       unsigned m_test_num;
       std::string m_dat_path;
+      std::vector<std::string> m_test_param;
       bool m_valid;
       bool m_aligned;
 
@@ -85,6 +86,10 @@ namespace Sensors
         param("Path To Data Folder", m_dat_path)
         .defaultValue("")
         .description("Path to output data folder");
+
+        param("Testing Parameters", m_test_param)
+        .defaultValue("")
+        .description("Parameters being tested");
 
         bind<IMC::EstimatedState>(this);
         bind<IMC::GpsFix>(this);
@@ -210,7 +215,7 @@ namespace Sensors
       void
       outResult()
       {
-        std::vector<double> param;
+        std::vector<double> parameters;
         std::string file_name = "test_" + String::str(m_test_num) + ".dat";
         std::string file_path = m_dat_path + "/" + file_name;
         std::FILE* fd = std::fopen(file_path.c_str(), "w+");
@@ -218,14 +223,29 @@ namespace Sensors
         if (!m_valid)
           m_intavg_dist.value = -1;
         
-        m_ctx.config.get("Navigation.AUV.Navigation", 
-                          "Heading Noise Covariance with IMU", 
-                          "0, 0", param);
+        
+        for (auto itr = m_test_param.begin(); itr != m_test_param.end(); ++itr)
+        {
+          std::vector<double> local_param;
+          m_ctx.config.get("Navigation.AUV.Navigation", 
+                          *itr, 
+                          "0, 0", local_param);
+          
+          parameters.insert(parameters.end(), local_param.begin(), local_param.end());
+        }
 
         if (fd == 0)
           throw FileOpenError(file_name, System::Error::getLastMessage());
         else
-          fprintf(fd, "%d %e %e %f\n", m_test_num, param[0], param[1], m_intavg_dist.value);
+        {
+          fprintf(fd, "%d ", m_test_num);
+          auto itr = parameters.begin();
+          for (; itr != parameters.end(); ++itr)
+          {
+            fprintf(fd, "%e ", *itr);
+          }
+          fprintf(fd, "%f\n", m_intavg_dist.value);
+        }
       }
 
       //! Main loop.
