@@ -641,8 +641,8 @@ namespace Navigation
             r = m_kal.getState(STATE_R) + m_kal.getState(STATE_R_BIAS);
             m_kal.setInnovation(OUT_R_IMU,  m_kal.getOutput(OUT_R_IMU) - r);
             //PSI
-            m_heading_imu += Angles::minSignedAngle(m_heading, Angles::normalizeRadian(get(QT_EULER, AXIS_Z)));
-            m_kal.setOutput(OUT_PSI_IMU, m_heading);
+            m_heading_imu += tstep * hrate;
+            m_kal.setOutput(OUT_PSI_IMU, m_heading_imu);
             m_kal.setInnovation(OUT_PSI_IMU, m_kal.getOutput(OUT_PSI_IMU) - getBiasedHeading());            
           }
 
