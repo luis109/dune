@@ -735,7 +735,10 @@ namespace Navigation
             {
               // Tests
               if (!m_aligned)
+              {
                 debugmsg("GPS disabled");
+                inf("Aligned");
+              }
             
               m_aligned = true;
               m_heading_buffer=0;
