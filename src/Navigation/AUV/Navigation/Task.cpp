@@ -170,7 +170,9 @@ namespace Navigation
         double speed_relation_limit_value;
         //!  Distance of Depth sensor to the veicle pitch rotation axis 
         float distance_depth_sensor;
-
+        
+        //! Time to start alignment in seconds
+        double align_time;
       };
 
       struct Task: public DUNE::Navigation::BasicNavigation
@@ -188,6 +190,8 @@ namespace Navigation
         //! Pointer to speed model for speed conversions
         const Plans::SpeedModel* m_speed_model;
 
+        //! Start alignment timer
+        Time::Counter<double> m_align_timer;
         //! Debug messages
         IMC::DevDataText m_str_dbg;
         IMC::Temperature m_val_dbg;
@@ -301,6 +305,11 @@ namespace Navigation
           .maximumValue("100")
           .description("speed to rpm maximum diference between estimation and speed model");
 
+          param("Time to start alignment", m_args.align_time)
+          .defaultValue("0")
+          .minimumValue("0")
+          .description("Time interval to allow the start of imu alignment");
+
           // Extended Kalman Filter initialization.
           m_kal.reset(NUM_STATE, NUM_OUT);
           resetKalman();
@@ -354,6 +363,7 @@ namespace Navigation
           BasicNavigation::onResourceInitialization();
           m_avg_speed = new MovingAverage<double>(m_args.navg_speed);
           startSpeedModel(&m_ctx.config);
+          m_align_timer.setTop(m_args.align_time);
         }
 
         void
@@ -413,6 +423,9 @@ namespace Navigation
             return;
 
           if (msg->getSourceEntity() != m_imu_eid)
+            return;
+
+          if (!m_align_timer.overflow())
             return;
 
           if ((msg->state == IMC::EntityActivationState::EAS_ACTIVE ||
@@ -692,7 +705,7 @@ namespace Navigation
 
           // Extended Kalman Filter update with no threshold defined.
           m_kal.update(0.0);
-
+ 
           // Restore bias estimation.
           if (m_lbl_reading)
           {
