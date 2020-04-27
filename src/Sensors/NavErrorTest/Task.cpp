@@ -50,6 +50,7 @@ namespace Sensors
       unsigned m_nav_eid;
       unsigned m_gps_eid;
       IMC::GpsFix m_last_gps;
+      IMC::GpsFix m_origin;
       IMC::EstimatedState m_last_state;
       unsigned m_test_num;
       std::string m_dat_path;
@@ -63,6 +64,7 @@ namespace Sensors
       IMC::Distance m_distance;
       IMC::Distance m_intavg_dist;
       IMC::Distance m_mavg_dist;
+      IMC::EulerAngles m_bearing;
 
       /**************************/
       /*********Counters********/
@@ -103,6 +105,7 @@ namespace Sensors
         m_distance.setSourceEntity(reserveEntity(String::str("%s.distance", getEntityLabel())));
         m_intavg_dist.setSourceEntity(reserveEntity(String::str("%s.integration", getEntityLabel())));
         m_mavg_dist.setSourceEntity(reserveEntity(String::str("%s.average", getEntityLabel())));
+        m_bearing.setSourceEntity(reserveEntity(String::str("%s.bearing", getEntityLabel())));
       }
 
       //! Resolve entity names.
@@ -207,6 +210,34 @@ namespace Sensors
           return;
         else if (msg->hdop > 4)
           return;
+        
+        if (m_num_gps == 0)
+        {
+          m_origin = *msg;
+        }
+        else
+        {
+          IMC::EstimatedState aux[2];
+          try
+          {
+            Coordinates::WGS84::displacement(m_origin.lat, m_origin.lon, m_origin.height,
+                                          m_last_gps.lat, m_last_gps.lon, m_last_gps.height,
+                                          &aux[0].x, &aux[0].y, &aux[0].z);
+
+            Coordinates::WGS84::displacement(m_origin.lat, m_origin.lon, m_origin.height,
+                                          msg->lat, msg->lon, msg->height,
+                                          &aux[1].x, &aux[1].y, &aux[1].z);
+
+            m_bearing.psi = getBearing(aux[0], aux[1]);
+            dispatch(m_bearing);
+          }
+          catch(...)
+          {
+            IMC::DevDataText shutdown;
+            shutdown.value = "shutdown: Coordinates NavErrorTest";
+            dispatch(shutdown);
+          }
+        }
 
         m_last_gps = *msg;
         ++m_num_gps;
