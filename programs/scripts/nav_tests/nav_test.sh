@@ -16,13 +16,18 @@ run_test()
     for tf in ${TEST_FILES[@]}; do
       echo "$tn -> ${tf::-4}"
 
-      ./dune -c navtests/$tn/${tf::-4} 2>/dev/null &
+      if [[ ${#PROCESS[@]} -gt 0 ]]; then
+        ./dune -c navtests/$tn/${tf::-4} 2>/dev/null &
+      else
+        ./dune -c navtests/$tn/${tf::-4} & # 2>/dev/null
+      fi
+      
       local PROCESS+=($!)
       local TO_REMOVE+=($CONFIG_PATH/$tn/$tf)
       sleep 2
 
       if [[ ${#PROCESS[@]} -ge $CONCURRENT_REPLAYS ]]; then
-          echo "ENTERED WAIT"
+          echo "ENTERED WAIT - $(date +"%H:%M:%S")"
           wait ${PROCESS[@]}
 
           TESTS_RAN=$((TESTS_RAN + ${#PROCESS[@]}))
@@ -34,7 +39,7 @@ run_test()
       fi
     done
 
-    echo "ENTERED WAIT"
+    echo "ENTERED WAIT - $(date +"%H:%M:%S")"
     wait ${PROCESS[@]}
 
     TESTS_RAN=$((TESTS_RAN + ${#PROCESS[@]}))
