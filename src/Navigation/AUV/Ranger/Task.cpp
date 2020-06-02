@@ -181,11 +181,11 @@ namespace Navigation
         void
         ping(const std::string& sys_name)
         {
-          IMC::UamTxFrame tx;
+          IMC::AcousticRequest tx;
           tx.setDestination(getSystemId());
-          tx.sys_dst = sys_name;
-          tx.flags = IMC::UamTxFrame::UTF_ACK;
-          tx.data.push_back(0);
+          tx.destination = sys_name;
+          tx.type = IMC::AcousticRequest::TYPE_RANGE;
+          
           dispatch(tx);
         }
 
