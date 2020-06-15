@@ -43,6 +43,8 @@ namespace Navigation
       {
         //! Ping periodicity.
         double ping_period;
+        //! Stealth mode
+        bool stealth;
       };
 
       struct Task: public DUNE::Tasks::Task
@@ -53,6 +55,10 @@ namespace Navigation
         MessageList<IMC::LblBeacon>::const_iterator m_cursor;
         //! Timer.
         Time::Counter<double> m_timer;
+        //! Navigation entity id
+        uint32_t m_nav_eid;
+        //! Last usbl position
+        IMC::UsblPositionExtended m_last_usbl;
         //! Task arguments.
         Arguments m_args;
 
@@ -71,9 +77,14 @@ namespace Navigation
           .defaultValue("2")
           .minimumValue("2");
 
+          param("Stealth Mode", m_args.stealth)
+          .defaultValue("false");
+
           bind<IMC::LblConfig>(this);
           bind<IMC::UamRxRange>(this);
           bind<IMC::UsblPositionExtended>(this);
+          bind<IMC::GpsFix>(this);
+          bind<IMC::EntityState>(this);
         }
 
         //! Update internal state with new parameter values.
@@ -89,6 +100,19 @@ namespace Navigation
         onResourceInitialization(void)
         {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+        }
+
+        void
+        onEntityResolution()
+        {
+          try
+          {
+            m_nav_eid = resolveEntity("Navigation");
+          }
+          catch (...)
+          {
+            m_nav_eid = std::numeric_limits<unsigned>::max();
+          }
         }
 
         void
@@ -123,6 +147,20 @@ namespace Navigation
         }
 
         void
+        consume(const IMC::EntityState* msg)
+        {
+          if (!m_args.stealth)
+            return;
+
+          if (msg->getSourceEntity() != m_nav_eid)
+            return;
+
+          // no beacon set -> broadcast | if beacon(s) set -> ping that beacon(s)
+          if (msg->state == IMC::EntityState::ESTA_BOOT)
+            m_lbl_config.beacons.empty() ? pingReversed("broadcast") : pingNextBeacon(true);
+        }
+
+        void
         consume(const IMC::UamRxRange* msg)
         {
           unsigned id = 0;
@@ -136,14 +174,60 @@ namespace Navigation
         }
 
         void
+        consume(const IMC::GpsFix* msg)
+        {
+          if (msg->getSource() == getSystemId())
+            return;
+          
+          unsigned int id;
+          std::string beacon_name = resolveSystemId(msg->getSource());
+          IMC::LblBeacon* beacon = getBeacon(beacon_name, id);
+
+          if (beacon != NULL)
+          {
+            // Update existing beacon
+            beacon->lat = msg->lat;
+            beacon->lon = msg->lon;
+          }
+          else
+          {
+            // Create new beacon
+            IMC::LblBeacon new_beacon;
+            new_beacon.beacon = beacon_name;
+            new_beacon.lat = msg->lat;
+            new_beacon.lon = msg->lon;
+
+            m_lbl_config.op = IMC::LblConfig::OP_SET_CFG;
+            m_lbl_config.beacons.push_back(new_beacon);
+            m_cursor = m_lbl_config.beacons.begin();
+
+            beacon = *m_cursor;
+          }
+
+          // Allow sending fix when setting beacon
+          if (m_last_usbl.target == beacon_name)
+          {
+            if (std::abs(m_last_usbl.getTimeStamp() - msg->getTimeStamp()) < 10.0)
+              sendUsblFix(beacon, &m_last_usbl);
+          }
+        }
+
+        void
         consume(const IMC::UsblPositionExtended* msg)
         {
+          m_last_usbl = *msg;
+
           unsigned dummy;
           IMC::LblBeacon* beacon = getBeacon(msg->target, dummy);
-
           if (beacon == NULL)
             return;
 
+          sendUsblFix(beacon, msg);
+        }
+
+        void
+        sendUsblFix(IMC::LblBeacon* beacon, const IMC::UsblPositionExtended* msg)
+        {
           double lat = beacon->lat;
           double lon = beacon->lon;
           double dep = beacon->depth;
@@ -155,7 +239,7 @@ namespace Navigation
           fix.lon = lon;
           fix.z = dep;
           fix.z_units = IMC::ZUnits::Z_DEPTH;
-          dispatch(fix);      
+          dispatch(fix);
         }
 
         IMC::LblBeacon*
@@ -189,6 +273,17 @@ namespace Navigation
           dispatch(tx);
         }
 
+        void
+        pingReversed(const std::string& sys_name)
+        {
+          IMC::AcousticRequest tx;
+          tx.setDestination(getSystemId());
+          tx.destination = sys_name;
+          tx.type = IMC::AcousticRequest::TYPE_REVERSE_RANGE;
+          
+          dispatch(tx);
+        }
+
         const IMC::LblBeacon*
         getNextBeacon(void)
         {
@@ -207,13 +302,17 @@ namespace Navigation
         }
 
         void
-        pingNextBeacon(void)
+        pingNextBeacon(bool reversed = false)
         {
           const IMC::LblBeacon* beacon = getNextBeacon();
+
           if (beacon == NULL)
             return;
 
-          ping(beacon->beacon);
+          if (reversed)
+            pingReversed(beacon->beacon);
+          else
+            ping(beacon->beacon);
         }
 
         void
@@ -238,7 +337,8 @@ namespace Navigation
 
             if (m_timer.overflow())
             {
-              pingNextBeacon();
+              // if in stealth ask for beacon position
+              pingNextBeacon(m_args.stealth);
               m_timer.reset();
             }
           }
