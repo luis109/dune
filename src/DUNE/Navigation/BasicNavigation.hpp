@@ -601,6 +601,11 @@ namespace DUNE
       void
       startNavigation(const IMC::GpsFix* msg);
 
+      //! Routine to start navigation
+      //! @param[in] msg UsblFixExtended IMC message
+      void
+      startNavigation(const IMC::UsblFixExtended* msg);
+
       //! Routine to correct LBL positions. This method must be invoked whenever
       //! a new navigation reference is created to correct transducers positions.
       void

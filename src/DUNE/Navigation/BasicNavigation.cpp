@@ -763,6 +763,13 @@ namespace DUNE
       if (msg->target != getSystemName())
         return;
 
+      if (!m_active)
+      {
+        // Navigation self-initialisation.
+        startNavigation(msg);
+        return;
+      }
+      
       double x = 0.0;
       double y = 0.0;
       Coordinates::WGS84::displacement(m_origin->lat, m_origin->lon, 0.0,
@@ -842,6 +849,31 @@ namespace DUNE
     BasicNavigation::startNavigation(const IMC::GpsFix* msg)
     {
       Memory::replace(m_origin, new IMC::GpsFix(*msg));
+
+      // Save message to cache.
+      IMC::CacheControl cop;
+      cop.op = IMC::CacheControl::COP_STORE;
+      cop.message.set(*msg);
+      dispatch(cop);
+
+      m_active = setup();
+
+      m_navstate = SM_STATE_BOOT;
+      setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_WAIT_CONVERGE);
+    }
+
+    void
+    BasicNavigation::startNavigation(const IMC::UsblFixExtended* msg)
+    {
+      m_origin = new IMC::GpsFix;
+      m_origin->lat = msg->lat;
+      m_origin->lon = msg->lon;
+
+      // TODO: Review height/altitude/depth
+      if (msg->z_units == IMC::Z_HEIGHT)
+        m_origin->height = msg->z;
+      else
+        m_origin->height = 0;
 
       // Save message to cache.
       IMC::CacheControl cop;
