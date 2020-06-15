@@ -49,7 +49,8 @@ namespace Transports
       CODE_REPORT  = 0x03,
       CODE_RESTART = 0x04,
       CODE_RAW     = 0x05,
-      CODE_USBL    = 0x06
+      CODE_USBL    = 0x06,
+      CODE_GPS     = 0x07
     };
 
     struct Report
@@ -104,6 +105,9 @@ namespace Transports
       UsblTools::Modem* m_usbl_modem;
       //! Task arguments.
       Arguments m_args;
+
+      //! Last gps message
+      IMC::GpsFix m_last_gps;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -190,6 +194,7 @@ namespace Transports
         bind<IMC::AcousticRequest>(this);
         bind<IMC::EstimatedState>(this);
         bind<IMC::FuelLevel>(this);
+        bind<IMC::GpsFix>(this);
         bind<IMC::PlanControlState>(this);
         bind<IMC::ReportControl>(this);
         bind<IMC::UamRxFrame>(this);
@@ -266,6 +271,12 @@ namespace Transports
       }
 
       void
+      consume(const IMC::GpsFix* msg)
+      {
+        m_last_gps = *msg;
+      }
+
+      void
       consume(const IMC::PlanControlState* msg)
       {
         m_progress = msg->plan_progress;
@@ -290,6 +301,7 @@ namespace Transports
           case (IMC::AcousticRequest::TYPE_ABORT):
           case (IMC::AcousticRequest::TYPE_RANGE):
           case (IMC::AcousticRequest::TYPE_RAW):
+          case (IMC::AcousticRequest::TYPE_REVERSE_RANGE):
           addToQueue((const IMC::AcousticRequest*)msg->clone());
           processQueue();
           break;
@@ -679,6 +691,16 @@ namespace Transports
       }
 
       void
+      sendReverseRange(const std::string& sys, const uint16_t id)
+      {
+        spew("sending range to %s", sys.c_str());
+        std::vector<uint8_t> data;
+        data.push_back(CODE_RANGE);
+        data.push_back(CODE_GPS);
+        sendFrame(sys, id, data, true);
+      }
+
+      void
       sendMessage(const std::string& sys, const uint16_t id, const InlineMessage<IMC::Message>& imsg)
       {
         const IMC::Message* msg = NULL;
@@ -807,9 +829,17 @@ namespace Transports
       void
       recvRange(uint16_t imc_src, uint16_t imc_dst, const IMC::UamRxFrame* msg)
       {
-        (void)imc_src;
         (void)imc_dst;
-        (void)msg;
+
+        if (msg->data[2] != CODE_GPS)
+          return;
+
+        IMC::AcousticRequest gps_reply;
+        gps_reply.setDestination(getSystemId());
+        gps_reply.destination = resolveSystemId(imc_src);
+        gps_reply.msg.set(m_last_gps.clone());
+        gps_reply.type = IMC::AcousticRequest::TYPE_MSG;          
+        dispatch(gps_reply, DF_LOOP_BACK);
       }
 
       void
@@ -961,6 +991,10 @@ namespace Transports
 
             case (IMC::AcousticRequest::TYPE_RANGE):
               sendRange(req->destination,id);
+              break;
+
+            case (IMC::AcousticRequest::TYPE_REVERSE_RANGE):
+              sendReverseRange(req->destination,id);
               break;
 
             case (IMC::AcousticRequest::TYPE_MSG):
