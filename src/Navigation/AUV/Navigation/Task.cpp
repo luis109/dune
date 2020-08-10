@@ -354,6 +354,9 @@ namespace Navigation
             m_kal.setProcessNoise(STATE_Y, m_args.pos_noise);
             m_kal.setProcessNoise(STATE_PSI, 0.0);
             m_kal.setProcessNoise(STATE_PSI_BIAS, m_process_noise[PN_PSI_BIAS]);
+            
+            m_kal.setMeasurementNoise(OUT_PSI, m_measurment_noise_imu[0]);
+            m_kal.setMeasurementNoise(OUT_R, m_measurment_noise_imu[1]);
 
             // LBL noise.
             for (unsigned i = 0; i < m_ranging.getSize(); i++)
