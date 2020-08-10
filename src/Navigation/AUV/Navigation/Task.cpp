@@ -940,6 +940,10 @@ namespace Navigation
 
           // IMU integrated heading
           m_navdata.custom_z = Angles::degrees(m_imu_heading);
+
+          IMC::Temperature psi_bias_cov;
+          psi_bias_cov.value = m_kal.getCovariance(STATE_PSI_BIAS);
+          dispatch(psi_bias_cov);
         }
       };
     }
