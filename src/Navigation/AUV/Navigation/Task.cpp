@@ -196,6 +196,9 @@ namespace Navigation
         //! AHRS update period. 
         double m_last_ahrs;
 
+        // Debug
+        double m_imu_heading;
+
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Navigation::BasicNavigation(name, ctx),
           m_avg_speed(NULL)
@@ -317,6 +320,7 @@ namespace Navigation
           m_kal.reset(NUM_STATE, NUM_OUT);
           resetKalman();
           m_heading_buffer=0;
+          m_imu_heading = 0;
 
           // Register callbacks
           bind<IMC::EntityActivationState>(this);
@@ -457,6 +461,9 @@ namespace Navigation
         void
         imuActivateDeadReckoning(void)
         {
+          // IMU heading integration
+          m_imu_heading = m_heading;
+
           // Dead reckoning mode.
           m_dead_reckoning = true;
           debug("start navigation alignment");
@@ -484,6 +491,9 @@ namespace Navigation
         void
         imuDeActivateDeadReckoning(void)
         {
+          // IMU heading integration
+          m_imu_heading = 0;
+
           // Stop integrate heading rates and use AHRS data.
           // Reset IMU sync flags
           m_receive_delta =false;
@@ -657,9 +667,16 @@ namespace Navigation
           m_kal.predict();
 
           // Euler Angles update modes.
-          double hrate = getHeadingRate();
+          double hrate = getHeadingRate(m_dead_reckoning);
           m_z_anglle = hrate;
 
+          // IMU heading integration
+          if (m_dead_reckoning)
+          {
+            m_imu_heading += hrate * tstep;
+            m_imu_heading = Angles::normalizeRadian(m_imu_heading);
+          }
+          
           double  time_ahrs = -1;
           if(m_dead_reckoning)
             time_ahrs = Time::Clock::get() - m_last_ahrs;
@@ -921,8 +938,8 @@ namespace Navigation
                                           m_kal.getInnovation(OUT_GPS_Y));
           m_navdata.custom_y = m_kal.getState(STATE_K);
 
-          double ang = m_estate.psi - Angles::normalizeRadian(getEuler(AXIS_Z));
-          m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(ang));
+          // IMU integrated heading
+          m_navdata.custom_z = Angles::degrees(m_imu_heading);
         }
       };
     }
