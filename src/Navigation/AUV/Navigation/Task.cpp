@@ -188,6 +188,8 @@ namespace Navigation
         //! Pointer to speed model for speed conversions
         const Plans::SpeedModel* m_speed_model;
 
+        double m_imu_heading;
+
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Navigation::BasicNavigation(name, ctx),
           m_avg_speed(NULL)
@@ -400,6 +402,8 @@ namespace Navigation
             if (m_dead_reckoning)
               return;
 
+            m_imu_heading = m_heading;
+
             // Dead reckoning mode.
             m_dead_reckoning = true;
             debug("start navigation alignment");
@@ -422,6 +426,7 @@ namespace Navigation
             if (!m_dead_reckoning)
               return;
 
+            m_imu_heading = 0;
             // Stop integrate heading rates and use AHRS data.
             m_dead_reckoning = false;
             m_aligned = false;
@@ -587,8 +592,14 @@ namespace Navigation
           m_kal.predict();
 
           // Euler Angles update modes.
-          double hrate = getHeadingRate();
+          double hrate = getHeadingRate(m_dead_reckoning);
           m_kal.setOutput(OUT_R, hrate);
+
+          if (m_dead_reckoning)
+          {
+            m_imu_heading += tstep * hrate;
+            m_imu_heading = Angles::normalizeRadian(m_imu_heading);
+          }
 
           if (m_dead_reckoning)
             m_heading += tstep * hrate;
@@ -836,8 +847,8 @@ namespace Navigation
                                           m_kal.getInnovation(OUT_GPS_Y));
           m_navdata.custom_y = m_kal.getState(STATE_K);
 
-          double ang = m_estate.psi - Angles::normalizeRadian(getEuler(AXIS_Z));
-          m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(ang));
+          
+          m_navdata.custom_z = Angles::degrees(m_imu_heading);
         }
       };
     }
