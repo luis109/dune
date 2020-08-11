@@ -517,6 +517,18 @@ namespace DUNE
       void
       checkDeclination(double lat, double lon, double height);
 
+      bool
+      gpsDisable()
+      {
+        if (m_gps_disable)
+          return true;
+
+        if (m_gps_disable_aligned && m_aligned)
+          return true;
+
+        return false;
+      }
+
       //! Kalman Filter matrices.
       Navigation::KalmanFilter m_kal;
       //! Ranging data.
@@ -583,6 +595,11 @@ namespace DUNE
       bool m_lbl_reading;
       //! Derivative for heave.
       Math::Derivative<double> m_deriv_heave;
+
+      //! GPS disable for debug
+      bool m_gps_disable;
+      //! Disable GPS when aligned
+      bool m_gps_disable_aligned;
 
     private:
       //! Routine to filter earth rotation effect from angular velocity values.
@@ -657,8 +674,6 @@ namespace DUNE
       float m_altitude;
       //! DVL entity label.
       std::string m_elabel_dvl;
-      //! GPS disable for debug
-      bool m_gps_disable;
       //! Altitude entity label hardware.
       std::string m_elabel_alt_hard;
       //! Altitude entity label simulation.
