@@ -75,9 +75,13 @@ namespace DUNE
       .size(2)
       .description("Constants used in current LBL rejection scheme");
 
-      param("Disable GPS for debug", m_gps_disable)
+      param("Disable GPS", m_gps_disable)
       .defaultValue("false")
-      .description("Disable GPS for debug");
+      .description("Disable GPS for debug. Overrides Disable GPS when aligned");
+
+      param("Disable GPS When Aligned", m_gps_disable_aligned)
+      .defaultValue("false")
+      .description("Disable GPS when aligned");
 
       param("GPS timeout", m_without_gps_timeout)
       .units(Units::Second)
