@@ -146,7 +146,7 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::GpsFix* msg)
     {
-      if (m_gps_disable == true)
+      if (gpsDisable())
         return;
 
       if (msg->type == IMC::GpsFix::GFT_MANUAL_INPUT)
