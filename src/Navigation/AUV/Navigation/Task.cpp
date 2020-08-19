@@ -894,7 +894,9 @@ namespace Navigation
           // Navigation error.
           m_navdata.custom_x = Math::norm(m_kal.getInnovation(OUT_GPS_X),
                                           m_kal.getInnovation(OUT_GPS_Y));
-          m_navdata.custom_y = m_kal.getState(STATE_K);
+                                          
+          m_navdata.custom_y = Angles::normalizeRadian(m_heading_imu - m_heading);
+          m_navdata.custom_y = Angles::degrees(m_navdata.custom_y);
 
           m_navdata.custom_z = Angles::degrees(m_heading_imu);
 
