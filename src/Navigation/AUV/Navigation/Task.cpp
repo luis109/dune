@@ -897,7 +897,7 @@ namespace Navigation
           m_navdata.custom_y = m_kal.getState(STATE_K);
 
           double ang = m_estate.psi - Angles::normalizeRadian(get(QT_EULER, AXIS_Z));
-          m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(ang));
+          m_navdata.custom_z = Angles::degrees(m_heading_imu);
         }
       };
     }
