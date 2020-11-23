@@ -32,6 +32,7 @@
 #include <vector>
 #include <map>
 #include <fstream>
+#include<csignal>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -352,6 +353,8 @@ namespace Transports
         lc.op = IMC::LoggingControl::COP_REQUEST_START;
         lc.name = "idle";
         dispatch(lc);
+
+        std::raise(SIGINT);
       }
 
       void
