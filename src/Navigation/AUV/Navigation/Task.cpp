@@ -33,6 +33,8 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+// Standard headers
+#include <csignal>
 
 using DUNE_NAMESPACES;
 
@@ -770,7 +772,7 @@ namespace Navigation
           p.name = "Active";
           p.value = "false";
           IMC::SetEntityParameters msg;
-          msg.name = m_args.elabel_imu ;
+          msg.name = m_args.elabel_imu;
           msg.params.push_back(p);
           dispatch(msg);
         }
@@ -819,6 +821,7 @@ namespace Navigation
                   war(DTR("navigation not aligned - Automatic IMU poweroff"));
                   m_aligned = false;
                   m_heading_buffer=0;
+                  std::raise(SIGINT);
                 }
               }
               
