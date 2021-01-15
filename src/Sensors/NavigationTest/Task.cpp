@@ -130,7 +130,7 @@ namespace Sensors
         if (!m_aligned)
           return;
 
-        m_imu_error.psi = abs(msg->custom_x - msg->custom_y);
+        m_imu_error.psi = abs(Angles::normalizeRadian(msg->custom_x - msg->custom_y));
         dispatch(m_imu_error);
       }
 
@@ -141,9 +141,6 @@ namespace Sensors
           return;
 
         if (msg->getSourceEntity() != m_nav_eid)
-          return;
-
-        if (!m_aligned)
           return;
 
         m_psi_bias_cov.value = msg->bias_psi;
