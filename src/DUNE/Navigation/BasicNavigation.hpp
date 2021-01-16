@@ -520,7 +520,7 @@ namespace DUNE
       bool
       gpsDisable()
       {
-        if (m_gps_disable)
+        if (m_gps_disable && m_gps_disable_timer.overflow())
           return true;
 
         if (m_gps_disable_aligned && m_aligned)
@@ -600,6 +600,10 @@ namespace DUNE
       bool m_gps_disable;
       //! Disable GPS when aligned
       bool m_gps_disable_aligned;
+      //! Timer for GPS disable
+      Time::Counter<double> m_gps_disable_timer;
+      //! Time for GPS disable
+      double m_gps_disable_wait_time;
 
     private:
       //! Routine to filter earth rotation effect from angular velocity values.
