@@ -36,6 +36,8 @@
 
 using DUNE_NAMESPACES;
 
+#include <csignal>
+
 namespace Navigation
 {
   namespace AUV
@@ -718,6 +720,7 @@ namespace Navigation
                   war(DTR("navigation not aligned - Automatic IMU poweroff"));
                   m_aligned  = false;
                   m_heading_buffer=0;
+                  std::raise(SIGINT);
                 }
               }
             }
