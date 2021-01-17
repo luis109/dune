@@ -221,10 +221,6 @@ namespace DUNE
       .defaultValue("1.0")
       .description("Exponential moving average filter gain used in altitude");
 
-      param("IMU initialization time", m_imu_wait_time)
-      .defaultValue("0.0")
-      .description("Time navigation waits before using IMU data, in seconds");
-
       param("GPS disable wait time", m_gps_disable_wait_time)
       .defaultValue("0.0")
       .description("Time waited before using GPS is disabled, in seconds");
