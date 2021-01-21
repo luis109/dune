@@ -64,6 +64,8 @@ vehicles=(  'lauv-noptilus-3'
             'lauv-noptilus-3')
 
 #   Testable variables:
+AHRSONLY='false'
+
 DISGPS='false'
 DISGPSWAITTIME='20.0'
 DISGPSAL='true'
@@ -116,6 +118,10 @@ for ((l=0; l<${#logs[@]}; l++)); do
         COMMANDS+="s+\#RAHRS\#+${RAHRS[$n]}+g;"
         COMMANDS+="s+\#PSIIMU\#+${PSIIMU[$n]}+g;"
         COMMANDS+="s+\#RIMU\#+${RIMU[$n]}+g;"
+
+        if [ $AHRSONLY == 'true' ]; then
+            COMMANDS+="/IMU,/d;"
+        fi
 
         sed -e $COMMANDS $BASE_FILE > $INI_FILE
         $DUNE_BUILD/dune -c $INI_FILE_RPATH
