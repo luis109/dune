@@ -46,12 +46,16 @@
 
 #!/usr/bin/env bash
 #   Directories
+DUNE_SRC=/home/luis/workspace/dune/dune
 DUNE_BUILD=/home/luis/workspace/dune/build
 BASE_FILE=/home/luis/workspace/dune/dune/etc/testing/replays/sgnav-replay-list-base.ini
 INI_FILE=/home/luis/workspace/dune/dune/etc/testing/replays/sgnav-replay-list.ini
 INI_FILE_RPATH=testing/replays/sgnav-replay-list
 
 # USER INPUTS:
+#   Branch
+branch='feature/NavTest_scripts'
+
 #   General variables:
 logs=(  '115150_navigation_test_fig8'
         '133742_navigation_test_fig8'
@@ -96,6 +100,11 @@ fi
 for log in ${logs[@]}; do
     log_paths+=($(realpath $TEST_DIR/../og/$log/Data.lsf))
 done
+
+#   Switch to branch
+cd $DUNE_SRC && git stash && git checkout $branch
+cd $DUNE_BUILD && make rebuild_cache && make -j8
+cd $TEST_DIR
 
 #   Get start date (for getting replays)
 date_start=$(date +"%Y%m%d")
