@@ -434,8 +434,6 @@ namespace Navigation
           // Dead reckoning mode.
 
           // Reinitialize state covariance matrix value.
-          m_kal.resetCovariance(STATE_PSI_BIAS);
-          m_kal.setCovariance(STATE_PSI_BIAS, m_state_cov[SC_PSI_BIAS]);
           m_kal.resetCovariance(STATE_R_BIAS);
           m_kal.setCovariance(STATE_R_BIAS, m_state_cov[SC_R_BIAS]);
 
@@ -653,10 +651,6 @@ namespace Navigation
           double biased_heading_rate = getBiasedHeadingRate();
 
           //AHRS
-          //R
-          double hrate = getHeadingRate(false);
-          m_kal.setOutput(OUT_R_AHRS, hrate);
-          m_kal.setInnovation(OUT_R_AHRS,  m_kal.getOutput(OUT_R_AHRS) - biased_heading_rate);
           //PSI
           m_heading += Angles::minSignedAngle(m_heading, Angles::normalizeRadian(getEuler(AXIS_Z)));
           m_kal.setOutput(OUT_PSI_AHRS, m_heading);
@@ -668,12 +662,16 @@ namespace Navigation
             //R
             double hrate = getHeadingRate(true);
             m_kal.setOutput(OUT_R_IMU, hrate);
-            m_kal.setInnovation(OUT_R_IMU,  m_kal.getOutput(OUT_R_IMU) - biased_heading_rate);
-            //PSI
-            m_heading_imu += tstep * hrate;
-            m_kal.setOutput(OUT_PSI_IMU, m_heading_imu);
-            m_kal.setInnovation(OUT_PSI_IMU, m_kal.getOutput(OUT_PSI_IMU) - biased_heading);            
+            m_kal.setInnovation(OUT_R_IMU,  m_kal.getOutput(OUT_R_IMU) - biased_heading_rate);         
           }
+          else
+          {
+            //R
+            double hrate = getHeadingRate(false);
+            m_kal.setOutput(OUT_R_AHRS, hrate);
+            m_kal.setInnovation(OUT_R_AHRS,  m_kal.getOutput(OUT_R_AHRS) - biased_heading_rate);
+          }
+          
 
           // GPS innovation matrix.
           if (m_gps_reading || m_usbl_reading)
@@ -928,8 +926,9 @@ namespace Navigation
 
           if (m_imu_state >= IN_ALIGNING)
           {
-            m_kal.setObservation(OUT_PSI_IMU, STATE_PSI, 1.0);
-            m_kal.setObservation(OUT_PSI_IMU, STATE_PSI_BIAS, 1.0);
+            m_kal.setObservation(OUT_R_AHRS, STATE_R, 0.0);
+            m_kal.setObservation(OUT_R_AHRS, STATE_R_BIAS, 0.0);
+
             m_kal.setObservation(OUT_R_IMU, STATE_R, 1.0);
             m_kal.setObservation(OUT_R_IMU, STATE_R_BIAS, 1.0);
           }
