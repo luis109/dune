@@ -144,8 +144,8 @@ namespace Navigation
           if (beacon == NULL)
             return;
 
-          double lat = beacon->lat;
-          double lon = beacon->lon;
+          double lat = Angles::radians(beacon->lat);
+          double lon = Angles::radians(beacon->lon);
           double dep = beacon->depth;
           WGS84::displace(-msg->n, -msg->e, -msg->d, &lat, &lon, &dep);
 
@@ -155,7 +155,7 @@ namespace Navigation
           fix.lon = lon;
           fix.z = dep;
           fix.z_units = IMC::ZUnits::Z_DEPTH;
-          dispatch(fix);      
+          dispatch(fix);
         }
 
         IMC::LblBeacon*

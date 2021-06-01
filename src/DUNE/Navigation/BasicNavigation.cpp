@@ -770,6 +770,12 @@ namespace DUNE
                                        &x, &y);
 
       runKalmanUSBL(x, y);
+
+      IMC::Distance dist;
+      dist.value = Coordinates::WGS84::distance(m_last_lat, m_last_lon, 0.0,
+                                       msg->lat, msg->lon, 0.0);
+      dispatch(dist);
+      inf("GPS: (%f, %f); USBL: (%f, %f): %f", m_last_lat, m_last_lon, msg->lat, msg->lon, dist.value);
     }
 
     void
