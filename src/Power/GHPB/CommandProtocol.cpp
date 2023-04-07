@@ -48,11 +48,9 @@ namespace Power
       cmd.reset();
       char bfr[16];
 
-      printf("decode start\n");
       // Command must have at least a type
       if (!sentence.getField(0, &cmd.m_type))
         return false;
-      printf("decode got type\n");
       if (!sentence.getField(1, &cmd.m_dev))
         return true;
 
@@ -97,7 +95,7 @@ namespace Power
       if (rv == 0)
         throw std::runtime_error(DTR("invalid read size"));
 
-      m_task->trace("RxMsg: %s", &m_buffer[0]);
+      m_task->trace("RxMsg: %s", sanitize(&m_buffer[0]).c_str());
       NMEASentence sentence(&m_buffer[0]);
       if (!decode(cmd, sentence))
         return false;
@@ -124,7 +122,7 @@ namespace Power
       encode(cmd, sentence);
 
       sentence.getSentence(&m_buffer[0]);
-      m_task->trace("TxMsg: %s", &m_buffer[0]);
+      m_task->trace("TxMsg: %s", sanitize(&m_buffer[0]).c_str()  );
 
       return m_handle->writeString(&m_buffer[0]) > 0;
     }
