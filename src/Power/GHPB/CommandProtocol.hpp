@@ -44,6 +44,7 @@ namespace Power
 
     enum
     {
+      CMD_DEV_ACK = 'A',
       CMD_DEV_MOTOR = 'M',
       CMD_DEV_PWM = 'P',
       CMD_DEV_RELAY = 'R',
@@ -110,6 +111,13 @@ namespace Power
 
         void 
         encode(Command& cmd, NMEASentence& sentence);
+
+        void
+        resetBuffer()
+        {
+          m_buffer.clear();
+          m_buffer.resize(c_nmea_max_length);
+        }
     };
   }
 }

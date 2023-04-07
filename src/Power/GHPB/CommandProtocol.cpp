@@ -38,7 +38,7 @@ namespace Power
     m_task(task),
     m_handle(handle)
     {
-      m_buffer.resize(c_nmea_max_length);
+      resetBuffer();
     }
 
     bool
@@ -88,9 +88,10 @@ namespace Power
     bool 
     CommandProtocol::receiveCommand(Command& cmd)
     {
-      if (!Poll::poll(*m_handle, 1.0))
+      if (!Poll::poll(*m_handle, 0.1))
         return false;
       
+      resetBuffer();
       size_t rv = m_handle->read(&m_buffer[0], m_buffer.size());
       if (rv == 0)
         throw std::runtime_error(DTR("invalid read size"));
@@ -121,8 +122,9 @@ namespace Power
       NMEASentence sentence;
       encode(cmd, sentence);
 
+      resetBuffer();
       sentence.getSentence(&m_buffer[0]);
-      m_task->trace("TxMsg: %s", sanitize(&m_buffer[0]).c_str()  );
+      m_task->trace("TxMsg: %s", sanitize(&m_buffer[0]).c_str());
 
       return m_handle->writeString(&m_buffer[0]) > 0;
     }
