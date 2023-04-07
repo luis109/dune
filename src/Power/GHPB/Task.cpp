@@ -46,10 +46,19 @@ namespace Power
   {
     using DUNE_NAMESPACES;
 
+    //! Number of Power channels.
+    static const unsigned c_pwrs_count = 5;
+
     struct Arguments
     {
       //! IO device (URI).
       std::string io_dev;
+      //! IO device (URI).
+      uint16_t firmware_version;
+      //! Power channels names.
+      std::string pwr_names[c_pwrs_count];
+      //! Power channels states.
+      unsigned pwr_states[c_pwrs_count];
     };
 
     struct Task: public Hardware::BasicDeviceDriver
@@ -60,6 +69,8 @@ namespace Power
       Arguments m_args;
       //! Command protocol handler
       CommandProtocol* m_cmd_protocol;
+      //! Power channels.
+      PowerChannels m_pwr_channels;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Hardware::BasicDeviceDriver(name, ctx),
@@ -73,6 +84,20 @@ namespace Power
         param("IO Port - Device", m_args.io_dev)
         .defaultValue("")
         .description("IO device URI in the form \"uart://DEVICE:BAUD\"");
+                    
+        param("Firmware Version", m_args.firmware_version)
+        .defaultValue("1")
+        .description("Firmware version sent by GHPB");
+
+        for (unsigned i = 0; i < c_pwrs_count; ++i)
+        {
+          std::string option = String::str("Power Channel %u - Name", i);
+          param(option, m_args.pwr_names[i]);
+
+          option = String::str("Power Channel %u - State", i);
+          param(option, m_args.pwr_states[i])
+          .defaultValue("0");
+        }
 
         // Use wait for messages
         setWaitForMessages(1.0);
@@ -81,6 +106,18 @@ namespace Power
       void
       onUpdateParameters(void)
       {
+        m_pwr_channels.clear();
+        for (unsigned i = 0; i < c_pwrs_count; ++i)
+        {
+          PowerChannel* channel = new PowerChannel;
+          channel->id = i;
+          channel->state.name = m_args.pwr_names[i];
+          if (m_args.pwr_states[i] == 1)
+            channel->state.state = IMC::PowerChannelState::PCS_ON;
+          else
+            channel->state.state = IMC::PowerChannelState::PCS_OFF;
+          m_pwr_channels.add(i, channel);
+        }
       }
 
       //! Try to connect to the device.
@@ -114,21 +151,30 @@ namespace Power
       void
       onInitializeDevice() override
       {
-        getVersion();
+        wait(1.0);
+
+        if (!getVersion())
+          throw RestartNeeded("Unable to get correct version", 5.0);
+        
+        if (!commandWakeup(true))
+          throw RestartNeeded("Unable to wakeup device", 5.0);
+        
+        for (auto pc : m_pwr_channels)
+          commandPowerChannel(pc.second->id, pc.second->state.state);
       }
 
       bool
       waitForReply(Command& cmd, const double timeout = 1.5)
       {
-        Counter<double> tout;
-        tout.setTop(timeout);
+        Counter<double> timer;
+        timer.setTop(timeout);
         
-        while (!tout.overflow())
+        while (!timer.overflow())
         {
-          if (!!m_cmd_protocol->receiveCommand(cmd))
-            continue;
-          else
+          if (m_cmd_protocol->receiveCommand(cmd))
             return true;
+          else
+            continue;
         }
 
         return false;
@@ -145,11 +191,53 @@ namespace Power
         version_cmd.m_dev_num = 0;
         m_cmd_protocol->sendCommand(version_cmd);
         
-        if (waitForReply(version_rpl))
+        if (waitForReply(version_rpl, 2.0))
         {
           if (version_rpl.m_type == CMD_TYPE_INFO && 
               version_rpl.m_dev == CMD_DEV_VERSION &&
-              version_rpl.m_val[0] == 1)
+              version_rpl.m_val[0] == m_args.firmware_version)
+            return true;
+        }
+
+        return false;
+      }
+
+      bool
+      commandWakeup(bool state)
+      {
+        Command cmd;
+        Command rpl;
+
+        cmd.m_type = CMD_TYPE_SET;
+        cmd.m_dev = CMD_DEV_WAKEUP;
+        cmd.m_dev_num = 0;
+        cmd.m_val[0] = state;
+        m_cmd_protocol->sendCommand(cmd);
+        
+        if (waitForReply(rpl))
+        {
+          if (rpl.m_type == CMD_TYPE_INFO && rpl.m_dev == CMD_DEV_ACK)
+            return true;
+        }
+
+        return false;
+      }
+
+      bool
+      commandPowerChannel(unsigned id, bool state)
+      {
+        Command cmd;
+        Command rpl;
+
+        cmd.m_type = CMD_TYPE_SET;
+        cmd.m_dev = CMD_DEV_RELAY;
+        cmd.m_dev_num = id;
+        cmd.m_val[0] = state;
+        m_cmd_protocol->sendCommand(cmd);
+        
+        if (waitForReply(rpl))
+        {
+          if (rpl.m_type == CMD_TYPE_INFO && rpl.m_dev == CMD_DEV_ACK)
             return true;
         }
 
