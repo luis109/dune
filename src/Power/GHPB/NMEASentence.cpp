@@ -56,11 +56,9 @@ namespace Power
     NMEASentence::NMEASentence(const char* sentence):
       NMEASentence()
     {
-      printf("constructor got sentence\n");
       if (!checkSentence(sentence))
         return;
 
-      printf("constructor sentence checked OK\n");
       strcpy(m_sentence, sentence);
       makeFields();
 
