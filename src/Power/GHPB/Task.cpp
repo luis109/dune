@@ -37,6 +37,7 @@
 
 // Local headers.
 #include "PowerChannels.hpp"
+#include "MotorChannels.hpp"
 #include "CommandProtocol.hpp"
 
 namespace Power
@@ -48,6 +49,8 @@ namespace Power
 
     //! Number of Power channels.
     static const unsigned c_pwrs_count = 5;
+    //! Number of Motor channels.
+    static const unsigned c_mtrs_count = 6;
 
     struct Arguments
     {
@@ -59,6 +62,8 @@ namespace Power
       std::string pwr_names[c_pwrs_count];
       //! Power channels states.
       unsigned pwr_states[c_pwrs_count];
+      //! Motor channel speed.
+      int mtr_speeds[c_mtrs_count];
     };
 
     struct Task: public Hardware::BasicDeviceDriver
@@ -71,6 +76,8 @@ namespace Power
       CommandProtocol* m_cmd_protocol;
       //! Power channels.
       PowerChannels m_pwr_channels;
+      //! Motor channels.
+      MotorChannels m_mtr_channels;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Hardware::BasicDeviceDriver(name, ctx),
@@ -99,8 +106,20 @@ namespace Power
           .defaultValue("0");
         }
 
+        for (unsigned i = 0; i < c_mtrs_count; ++i)
+        {
+          std::string option = String::str("Motor Channel %u - State", i);
+          param(option, m_args.mtr_speeds[i])
+          .defaultValue("0");
+        }
+
         // Use wait for messages
         setWaitForMessages(1.0);
+
+        // Register handler routines.
+        bind<IMC::QueryPowerChannelState>(this);
+        bind<IMC::PowerChannelControl>(this);
+        bind<IMC::SetThrusterActuation>(this);
       }
 
       void
@@ -117,6 +136,15 @@ namespace Power
           else
             channel->state.state = IMC::PowerChannelState::PCS_OFF;
           m_pwr_channels.add(i, channel);
+        }
+
+        m_mtr_channels.clear();
+        for (unsigned i = 0; i < c_mtrs_count; ++i)
+        {
+          MotorChannel* channel = new MotorChannel;
+          channel->id = i;
+          channel->speed = m_args.mtr_speeds[i];
+          m_mtr_channels.add(i, channel);
         }
       }
 
@@ -143,6 +171,9 @@ namespace Power
       void
       onDisconnect() override
       {
+        // Turn off power
+        commandWakeup(false);
+
         Memory::clear(m_handle);
         Memory::clear(m_cmd_protocol);
       }
@@ -161,6 +192,55 @@ namespace Power
         
         for (auto pc : m_pwr_channels)
           commandPowerChannel(pc.second->id, pc.second->state.state);
+      }
+
+      void
+      consume(const IMC::QueryPowerChannelState* msg)
+      {
+        (void)msg;
+        // dispatchPowerChannelStates();
+      }
+
+      void
+      consume(const IMC::PowerChannelControl* msg)
+      {
+        inf("Got msg");
+        if (msg->name == "all")
+        {
+          for (auto pc : m_pwr_channels)
+          {
+            if (msg->op == IMC::PowerChannelControl::PCC_OP_TURN_OFF)
+              commandPowerChannel(pc.second->id, false);
+            else if (msg->op == IMC::PowerChannelControl::PCC_OP_TURN_ON)
+              commandPowerChannel(pc.second->id, true);
+            else if (msg->op == IMC::PowerChannelControl::PCC_OP_RESTART)
+            {
+              commandPowerChannel(pc.second->id, false);
+              commandPowerChannel(pc.second->id, true);
+            }
+          }
+          return;
+        }
+
+        auto itr = m_pwr_channels.find_by_name(msg->name);
+        if (itr == m_pwr_channels.end_by_name())
+          return;
+
+        if (msg->op == IMC::PowerChannelControl::PCC_OP_TURN_OFF)
+          commandPowerChannel(itr->second->id, false);
+        else if (msg->op == IMC::PowerChannelControl::PCC_OP_TURN_ON)
+          commandPowerChannel(itr->second->id, true);
+        else if (msg->op == IMC::PowerChannelControl::PCC_OP_RESTART)
+        {
+          commandPowerChannel(itr->second->id, false);
+          commandPowerChannel(itr->second->id, true);
+        }
+      }
+
+      void
+      consume(const IMC::SetThrusterActuation* msg)
+      {
+        commandMotorChannel(msg->id, msg->value);
       }
 
       bool
@@ -235,6 +315,32 @@ namespace Power
         cmd.m_val[0] = state;
         m_cmd_protocol->sendCommand(cmd);
         
+        if (waitForReply(rpl))
+        {
+          if (rpl.m_type == CMD_TYPE_INFO && rpl.m_dev == CMD_DEV_ACK)
+            return true;
+        }
+
+        return false;
+      }
+
+      //! Command motor channel speed and direction
+      //! @param id motor id
+      //! @param speed from 0 to 1
+      //! @return true if set successfully, false otherwise
+      bool
+      commandMotorChannel(unsigned id, double speed)
+      {
+        Command cmd;
+        Command rpl;
+
+        cmd.m_type = CMD_TYPE_SET;
+        cmd.m_dev = CMD_DEV_MOTOR;
+        cmd.m_dev_num = id;
+        cmd.m_val[0] = speed > 0 ? 0 : 1;
+        cmd.m_val[1] = (uint16_t)std::abs(speed * 100);
+
+        m_cmd_protocol->sendCommand(cmd);
         if (waitForReply(rpl))
         {
           if (rpl.m_type == CMD_TYPE_INFO && rpl.m_dev == CMD_DEV_ACK)
