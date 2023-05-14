@@ -204,7 +204,6 @@ namespace Power
       void
       consume(const IMC::PowerChannelControl* msg)
       {
-        inf("Got msg");
         if (msg->name == "all")
         {
           for (auto pc : m_pwr_channels)
