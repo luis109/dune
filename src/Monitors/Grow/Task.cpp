@@ -52,10 +52,15 @@ namespace Monitors
     {
       //! Date of grow start
       std::vector<int> start_date;
-      //! Time in vegetative stage
-      int vegetative_days;
-      //! Time in flowering stage
-      int flowering_days;
+      //! Time of grow start
+      std::vector<int> start_time;
+      //! Stage periods, in days
+      struct
+      {
+        int seedling;
+        int vegetative;
+        int flowering;
+      }period;
     };
 
     //! %Grow Monitor task.
@@ -65,6 +70,8 @@ namespace Monitors
       Arguments m_args;
       //! Grow start date in UNIX time
       double m_start_time;
+      //! Main PlantState message
+      IMC::PlantState m_pstate;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx)
@@ -72,13 +79,22 @@ namespace Monitors
         param("Start Date", m_args.start_date)
         .defaultValue("")
         .size(3)
-        .description("Time of grow start (year, month(0-11), day(0-31))");
+        .description("Date of grow start (year, month(0-11), day(0-31))");
 
-        param("Vegetative Days", m_args.vegetative_days)
+        param("Start Time", m_args.start_time)
+        .defaultValue("0, 0, 0")
+        .size(3)
+        .description("Time of grow start (hour(0-23), min(0-59), sec(0-59))");
+
+        param("Period -- Seedling", m_args.period.seedling)
+        .defaultValue("0")
+        .description("Time in seedling stage, in days");
+
+        param("Period -- Vegetative", m_args.period.vegetative)
         .defaultValue("0")
         .description("Time in vegetative stage, in days");
 
-        param("Flowering Days", m_args.flowering_days)
+        param("Period -- Flowering", m_args.period.flowering)
         .defaultValue("0")
         .description("Time in flowering stage, in days");
       }
@@ -86,7 +102,7 @@ namespace Monitors
       void
       onUpdateParameters(void)
       {
-        if (paramChanged(m_args.start_date))
+        if (paramChanged(m_args.start_date) || paramChanged(m_args.start_time))
         {
           struct tm t;
 
@@ -94,11 +110,20 @@ namespace Monitors
           t.tm_year = m_args.start_date[0] - 1900;
           t.tm_mon = m_args.start_date[1];
           t.tm_mday = m_args.start_date[2];
-          t.tm_hour = 0;
-          t.tm_min = 0;
-          t.tm_sec = 0;
+          t.tm_hour = m_args.start_time[0];
+          t.tm_min = m_args.start_time[1];
+          t.tm_sec = m_args.start_time[2];
 
           m_start_time = mktime(&t);
+        }
+
+        if (paramChanged(m_args.period.seedling) ||
+            paramChanged(m_args.period.vegetative) ||
+            paramChanged(m_args.period.flowering))
+        {
+          // Convert into total time
+          m_args.period.vegetative += m_args.period.seedling;
+          m_args.period.flowering += m_args.period.vegetative;
         }
       } 
 
@@ -115,10 +140,21 @@ namespace Monitors
       void
       onResourceInitialization(void)
       {
-        // Days since grow start
-        double days;
-        days = (Time::Clock::getSinceEpoch() - m_start_time) / c_sec_per_day;
-        inf("Days difference: %f", days);
+      }
+
+      void
+      checkCalendar()
+      {
+        m_pstate.days_elapsed = (Time::Clock::getSinceEpoch() - m_start_time) / c_sec_per_day;
+
+        if (m_pstate.days_elapsed > m_args.period.flowering)
+          m_pstate.stage = IMC::PlantState::STG_HARVESTING;
+        else if (m_pstate.days_elapsed > m_args.period.vegetative)
+          m_pstate.stage = IMC::PlantState::STG_FLOWRING;
+        else if (m_pstate.days_elapsed > m_args.period.seedling)
+          m_pstate.stage = IMC::PlantState::STG_VEGETATIVE;
+        else
+          m_pstate.stage = IMC::PlantState::STG_SEEDLING;
       }
  
       void
@@ -127,6 +163,10 @@ namespace Monitors
         while (!stopping())
         {
           waitForMessages(1.0);
+
+          checkCalendar();
+
+          dispatch(m_pstate);
         }
       }
     };
