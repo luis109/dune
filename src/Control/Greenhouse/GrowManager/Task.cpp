@@ -79,50 +79,25 @@ namespace Control::Greenhouse
         .size(3)
         .description("Light turn on time (hour (0-23), min(0-59), sec(0-59))");
 
-        param("Vegetative Light Time", m_args.veg_light_time)
+        param("Light Period -- Vegetative", m_args.veg_light_time)
         .defaultValue("18")
-        .description("Vegetative light time, in hours");
+        .minimumValue("1")
+        .maximumValue("23")
+        .description("Vegetative light on period, in hours");
 
-        param("Flowering Light Time", m_args.flw_light_time)
+        param("Light Period -- Flowering", m_args.flw_light_time)
         .defaultValue("12")
-        .description("Flowering light time, in hours");
+        .minimumValue("1")
+        .maximumValue("23")
+        .description("Flowering light on period, in hours");
 
-        m_plant_stage = true;
+        m_plant_stage = false;
       }
 
       void
       onUpdateParameters(void)
       {
-        // Initialize tm struct
-        time_t now = Time::Clock::getSinceEpoch();
-        struct tm* start = localtime(&now);
-
-        // Get timestamp of lights on, for today
-        start->tm_hour = m_args.light_turn_on[0];
-        start->tm_min = m_args.light_turn_on[1];
-        start->tm_sec = m_args.light_turn_on[2];
-        m_next_light_on = mktime(start);
-
-        // Get timestamp of next lights off
-        start->tm_hour += m_plant_stage ? m_args.flw_light_time : m_args.veg_light_time;
-        m_next_light_off = mktime(start);
-
-        // Check where we are now in light cycle and recalculate if needed
-        if(now > m_next_light_off)
-        {
-          m_next_light_on += 24 * c_sec_per_hour;
-          m_next_light_off += 24 * c_sec_per_hour;
-        }
-        else if (now > m_next_light_on)
-        {
-          m_next_light_on += 24 * c_sec_per_hour;
-        }
-
-        std::string next_light_on = Time::Format::getTimeDate(m_next_light_on);
-        std::string next_light_off = Time::Format::getTimeDate(m_next_light_off);
-
-        war("Next light on: %s", next_light_on.c_str());
-        war("Next light off: %s", next_light_off.c_str());
+        initializeLightCycle();
       } 
 
       void
@@ -141,6 +116,61 @@ namespace Control::Greenhouse
       }
 
       void
+      initializeLightCycle()
+      {
+        // Get on time
+        double on_time = 24 * c_sec_per_hour - getLightPeriod(m_plant_stage);
+
+        // Initialize tm struct
+        time_t now = Time::Clock::getSinceEpoch();
+        struct tm* start = localtime(&now);
+
+        // Get timestamp of lights on, for today
+        start->tm_hour = m_args.light_turn_on[0];
+        start->tm_min = m_args.light_turn_on[1];
+        start->tm_sec = m_args.light_turn_on[2];
+        m_next_light_on = mktime(start);
+
+        if (now < m_next_light_on)
+        {
+          if(now < m_next_light_on - on_time)
+          {
+            // TURN LIGHT ON
+            war("LIGHT TURN ON");
+            m_next_light_off = m_next_light_on - on_time;
+          }
+          else
+          {
+            // TURN LIGHT OFF
+            war("LIGHT TURN OFF");
+            m_next_light_off = m_next_light_on + getLightPeriod(m_plant_stage);
+          }
+        }
+        else
+        {
+          m_next_light_on += 24 * c_sec_per_hour;
+          if (now > m_next_light_on - on_time)
+          {
+            // TURN LIGHT OFF
+            war("LIGHT TURN OFF");
+            m_next_light_off = m_next_light_on + getLightPeriod(m_plant_stage);
+          }
+          else
+          {
+            // TURN LIGHT ON
+            war("LIGHT TURN ON");
+            m_next_light_off = m_next_light_on - on_time;
+          }
+        }
+
+        std::string next_light_on = Time::Format::getTimeDate(m_next_light_on);
+        std::string next_light_off = Time::Format::getTimeDate(m_next_light_off);
+
+        debug("Next light on: %s", next_light_on.c_str());
+        debug("Next light off: %s", next_light_off.c_str());
+      }
+
+      void
       checkLightCycle()
       {
         double now = Time::Clock::getSinceEpoch();
@@ -156,8 +186,15 @@ namespace Control::Greenhouse
         {
           // TURN LIGHT OFF
           war("LIGHT TURN OFF");
-          m_next_light_off = m_next_light_on + m_plant_stage ? m_args.flw_light_time : m_args.veg_light_time;
+          m_next_light_off = m_next_light_on + getLightPeriod(m_plant_stage);
         }
+      }
+
+      double
+      getLightPeriod(bool stage)
+      {
+        double hours = stage ? m_args.flw_light_time : m_args.veg_light_time;
+        return hours * c_sec_per_hour;
       }
 
       void
