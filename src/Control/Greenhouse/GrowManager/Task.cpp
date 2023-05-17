@@ -52,10 +52,13 @@ namespace Control::Greenhouse
     {
       //! Light turn on time
       std::vector<int> light_turn_on;
-      //! Vegetative light time, in hours
-      int veg_light_time;
-      //! Flowering light time, in hours
-      int flw_light_time;
+      //! Light periods, in hours, by plant stage
+      struct
+      {
+        int seedling;
+        int vegetative;
+        int flowering;
+      }period;
     };
 
     //! %Grow Monitor task.
@@ -63,13 +66,14 @@ namespace Control::Greenhouse
     {
       //! Task arguments.
       Arguments m_args;
+      //! Current Plant State
+      IMC::PlantState m_pstate;
       //! Time of next light turn on
       double m_next_light_on;
       //! Time of next light turn off
       double m_next_light_off;
-
-      //! Plant stage (this should be the PlantState message)
-      bool m_plant_stage;
+      //! Light period by stage
+      std::map<IMC::PlantState::PlantStageEnum, double> m_light_period;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx)
@@ -79,25 +83,41 @@ namespace Control::Greenhouse
         .size(3)
         .description("Light turn on time (hour (0-23), min(0-59), sec(0-59))");
 
-        param("Light Period -- Vegetative", m_args.veg_light_time)
+        param("Light Period -- Seedling", m_args.period.seedling)
         .defaultValue("18")
         .minimumValue("1")
         .maximumValue("23")
-        .description("Vegetative light on period, in hours");
+        .description("Seedling \'light on\' period, in hours");
 
-        param("Light Period -- Flowering", m_args.flw_light_time)
+        param("Light Period -- Vegetative", m_args.period.vegetative)
+        .defaultValue("18")
+        .minimumValue("1")
+        .maximumValue("23")
+        .description("Vegetative \'light on\' period, in hours");
+
+        param("Light Period -- Flowering", m_args.period.flowering)
         .defaultValue("12")
         .minimumValue("1")
         .maximumValue("23")
-        .description("Flowering light on period, in hours");
+        .description("Flowering \'light on\' period, in hours");
 
-        m_plant_stage = false;
+        bind<IMC::PlantState>(this);
       }
 
       void
       onUpdateParameters(void)
       {
-        initializeLightCycle();
+        if (paramChanged(m_args.period.seedling) ||
+            paramChanged(m_args.period.vegetative) ||
+            paramChanged(m_args.period.flowering))
+        {
+          m_light_period[IMC::PlantState::STG_SEEDLING] = m_args.period.seedling;
+          m_light_period[IMC::PlantState::STG_VEGETATIVE] = m_args.period.vegetative;
+          m_light_period[IMC::PlantState::STG_FLOWRING] = m_args.period.flowering;
+          m_light_period[IMC::PlantState::STG_HARVESTING] = m_args.period.flowering;
+
+          initializeLightCycle(); 
+        }
       } 
 
       void
@@ -116,10 +136,16 @@ namespace Control::Greenhouse
       }
 
       void
+      consume(const IMC::PlantState* msg)
+      {
+        m_pstate = *msg;
+      }
+
+      void
       initializeLightCycle()
       {
-        // Get on time
-        double on_time = 24 * c_sec_per_hour - getLightPeriod(m_plant_stage);
+        // Get off period
+        double off_period = 24 * c_sec_per_hour - lightPeriod();
 
         // Initialize tm struct
         time_t now = Time::Clock::getSinceEpoch();
@@ -131,43 +157,40 @@ namespace Control::Greenhouse
         start->tm_sec = m_args.light_turn_on[2];
         m_next_light_on = mktime(start);
 
+        // Correctly set next light on and off times
         if (now < m_next_light_on)
         {
-          if(now < m_next_light_on - on_time)
+          if(now < m_next_light_on - off_period)
           {
             // TURN LIGHT ON
-            war("LIGHT TURN ON");
-            m_next_light_off = m_next_light_on - on_time;
+            setLight(1);
+            m_next_light_off = m_next_light_on - off_period;
           }
           else
           {
             // TURN LIGHT OFF
-            war("LIGHT TURN OFF");
-            m_next_light_off = m_next_light_on + getLightPeriod(m_plant_stage);
+            setLight(0);
+            m_next_light_off = m_next_light_on + lightPeriod();
           }
         }
         else
         {
           m_next_light_on += 24 * c_sec_per_hour;
-          if (now > m_next_light_on - on_time)
+          if (now > m_next_light_on - off_period)
           {
             // TURN LIGHT OFF
-            war("LIGHT TURN OFF");
-            m_next_light_off = m_next_light_on + getLightPeriod(m_plant_stage);
+            setLight(0);
+            m_next_light_off = m_next_light_on + lightPeriod();
           }
           else
           {
             // TURN LIGHT ON
-            war("LIGHT TURN ON");
-            m_next_light_off = m_next_light_on - on_time;
+            setLight(1);
+            m_next_light_off = m_next_light_on - off_period;
           }
         }
 
-        std::string next_light_on = Time::Format::getTimeDate(m_next_light_on);
-        std::string next_light_off = Time::Format::getTimeDate(m_next_light_off);
-
-        debug("Next light on: %s", next_light_on.c_str());
-        debug("Next light off: %s", next_light_off.c_str());
+        outputLightSchedule();
       }
 
       void
@@ -178,35 +201,47 @@ namespace Control::Greenhouse
         if (now > m_next_light_on)
         {
           // TURN LIGHT ON
-          war("LIGHT TURN ON");
+          setLight(1);
           m_next_light_on += 24 * c_sec_per_hour;
+
+          outputLightSchedule();
         }
 
         if (now > m_next_light_off)
         {
           // TURN LIGHT OFF
-          war("LIGHT TURN OFF");
-          m_next_light_off = m_next_light_on + getLightPeriod(m_plant_stage);
+          setLight(0);
+          m_next_light_off = m_next_light_on + lightPeriod();
+
+          outputLightSchedule();
         }
       }
 
       double
-      getLightPeriod(bool stage)
+      lightPeriod()
       {
-        double hours = stage ? m_args.flw_light_time : m_args.veg_light_time;
-        return hours * c_sec_per_hour;
+        double hours = m_light_period[static_cast<IMC::PlantState::PlantStageEnum>(m_pstate.stage)];
+        return  hours * c_sec_per_hour;
       }
 
       void
-      printTM(tm &time)
+      outputLightSchedule()
       {
-        std::cout << "sec: " << time.tm_sec << "\n";
-        std::cout << "min: " << time.tm_min << "\n";
-        std::cout << "hour: " << time.tm_hour << "\n";
-        std::cout << "day: " << time.tm_mday << "\n";
-        std::cout << "month: " << time.tm_mon << "\n";
-        std::cout << "year: " << time.tm_year << "\n";
-        std::cout << "\n";
+        std::string next_light_on = Time::Format::getTimeDate(m_next_light_on);
+        std::string next_light_off = Time::Format::getTimeDate(m_next_light_off);
+
+        debug("Next light on: %s", next_light_on.c_str());
+        debug("Next light off: %s", next_light_off.c_str());
+      }
+
+      void
+      setLight(double level)
+      {
+        IMC::DesiredLight dlight;
+        dlight.value = level;
+        dispatch(dlight);
+
+        debug("Set light to: %f", level);
       }
  
       void
