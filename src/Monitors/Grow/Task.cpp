@@ -87,15 +87,15 @@ namespace Monitors
         .description("Time of grow start (hour(0-23), min(0-59), sec(0-59))");
 
         param("Period -- Seedling", m_args.period.seedling)
-        .defaultValue("0")
+        .defaultValue("7")
         .description("Time in seedling stage, in days");
 
         param("Period -- Vegetative", m_args.period.vegetative)
-        .defaultValue("0")
+        .defaultValue("60")
         .description("Time in vegetative stage, in days");
 
         param("Period -- Flowering", m_args.period.flowering)
-        .defaultValue("0")
+        .defaultValue("70")
         .description("Time in flowering stage, in days");
       }
 
