@@ -43,7 +43,7 @@ namespace Control::Greenhouse
     struct Arguments
     {
       //! Light power channel name
-      int light_pwr_chl;
+      int light_pwr_chn;
     };
 
     //! %Grow Monitor task.
@@ -51,12 +51,14 @@ namespace Control::Greenhouse
     {
       //! Task arguments.
       Arguments m_args;
+      //! Power control for lights
+      IMC::PowerChannelControl m_light_pwr;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx)
       {
 
-        param("Power Channel -- Light", m_args.light_pwr_chl)
+        param("Power Channel -- Light", m_args.light_pwr_chn)
         .defaultValue("")
         .description("Light power channel name");
 
@@ -66,6 +68,8 @@ namespace Control::Greenhouse
       void
       onUpdateParameters(void)
       {
+        if (paramChanged(m_args.light_pwr_chn))
+          m_light_pwr.name = m_args.light_pwr_chn;
       } 
 
       void
@@ -86,7 +90,18 @@ namespace Control::Greenhouse
       void
       consume(const IMC::DesiredLight* msg)
       {
-        
+        setLight(msg->value > 0);
+      }
+
+      void
+      setLight(bool state)
+      {
+        if (state)
+          m_light_pwr.op = IMC::PowerChannelControl::PCC_OP_SCHED_ON;
+        else
+          m_light_pwr.op = IMC::PowerChannelControl::PCC_OP_SCHED_OFF;
+
+        dispatch(m_light_pwr);
       }
 
       void
