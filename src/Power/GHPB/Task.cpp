@@ -81,7 +81,8 @@ namespace Power
 
       Task(const std::string& name, Tasks::Context& ctx):
         Hardware::BasicDeviceDriver(name, ctx),
-        m_handle(NULL)
+        m_handle(nullptr),
+        m_cmd_protocol(nullptr)
       {
         // Define configuration parameters.
         paramActive(Tasks::Parameter::SCOPE_GLOBAL,
@@ -204,6 +205,9 @@ namespace Power
       void
       consume(const IMC::PowerChannelControl* msg)
       {
+        if (m_handle == nullptr)
+          return;
+
         if (msg->name == "all")
         {
           for (auto pc : m_pwr_channels)
@@ -239,15 +243,16 @@ namespace Power
       void
       consume(const IMC::SetThrusterActuation* msg)
       {
+        if (m_handle == nullptr)
+          return;
+          
         commandMotorChannel(msg->id, msg->value);
       }
 
       bool
       waitForReply(Command& cmd, const double timeout = 1.5)
       {
-        Counter<double> timer;
-        timer.setTop(timeout);
-        
+        Counter<double> timer(timeout);
         while (!timer.overflow())
         {
           if (m_cmd_protocol->receiveCommand(cmd))
