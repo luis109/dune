@@ -49,13 +49,13 @@ namespace Control::Greenhouse
     };
 
     //! %Grow Monitor task.
-    struct Task: public DUNE::Tasks::Task
+    struct Task: public DUNE::Tasks::Periodic
     {
       //! Task arguments.
       Arguments m_args;
 
       Task(const std::string& name, Tasks::Context& ctx):
-        Tasks::Task(name, ctx)
+        Tasks::Periodic(name, ctx)
       {
         param("Motor Id -- Irrigation", m_args.irrigation_mtr_id)
         .defaultValue("0")
@@ -110,12 +110,8 @@ namespace Control::Greenhouse
       }
 
       void
-      onMain(void)
+      task(void)
       {
-        while (!stopping())
-        {
-          waitForMessages(1.0);
-        }
       }
     };
   }
