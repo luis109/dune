@@ -43,19 +43,19 @@ namespace Control::Greenhouse
     struct Arguments
     {
       //! Light power channel name
-      int light_pwr_chn;
+      std::string light_pwr_chn;
     };
 
     //! %Grow Monitor task.
-    struct Task: public DUNE::Tasks::Task
+    struct Task: public DUNE::Tasks::Periodic
     {
       //! Task arguments.
       Arguments m_args;
-      //! Power control for lights
-      IMC::PowerChannelControl m_light_pwr;
+      //! Current desired light
+      IMC::DesiredLight m_dlight; 
 
       Task(const std::string& name, Tasks::Context& ctx):
-        Tasks::Task(name, ctx)
+        Tasks::Periodic(name, ctx)
       {
 
         param("Power Channel -- Light", m_args.light_pwr_chn)
@@ -68,8 +68,6 @@ namespace Control::Greenhouse
       void
       onUpdateParameters(void)
       {
-        if (paramChanged(m_args.light_pwr_chn))
-          m_light_pwr.name = m_args.light_pwr_chn;
       } 
 
       void
@@ -90,27 +88,25 @@ namespace Control::Greenhouse
       void
       consume(const IMC::DesiredLight* msg)
       {
-        setLight(msg->value > 0);
+        m_dlight = *msg;
       }
 
       void
-      setLight(bool state)
+      setLight()
       {
-        if (state)
-          m_light_pwr.op = IMC::PowerChannelControl::PCC_OP_SCHED_ON;
-        else
-          m_light_pwr.op = IMC::PowerChannelControl::PCC_OP_SCHED_OFF;
+        IMC::PowerChannelControl light_pwr;
+        light_pwr.name = m_args.light_pwr_chn;
+        light_pwr.op = m_dlight.value > 0;
 
-        dispatch(m_light_pwr);
+        dispatch(light_pwr);
+
+        debug("Set light to: %d", light_pwr.op);
       }
 
       void
-      onMain(void)
+      task(void)
       {
-        while (!stopping())
-        {
-          waitForMessages(1.0);
-        }
+        setLight();
       }
     };
   }
