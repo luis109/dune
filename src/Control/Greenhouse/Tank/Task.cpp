@@ -53,6 +53,10 @@ namespace Control::Greenhouse
     {
       //! Task arguments.
       Arguments m_args;
+      //! Current desired irrigation
+      IMC::DesiredIrrigation m_dirrigation;
+      //! Current desired air flow
+      IMC::DesiredAirFlow m_dairflow;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Periodic(name, ctx)
@@ -92,6 +96,8 @@ namespace Control::Greenhouse
       void
       consume(const IMC::DesiredIrrigation* msg)
       {
+        m_dirrigation = *msg;
+
         IMC::SetThrusterActuation ta;
         ta.id = m_args.irrigation_mtr_id;
         ta.value = msg->value;
@@ -102,6 +108,8 @@ namespace Control::Greenhouse
       void
       consume(const IMC::DesiredAirFlow* msg)
       {
+        m_dairflow = *msg;
+
         IMC::SetThrusterActuation ta;
         ta.id = m_args.air_mtr_id;
         ta.value = msg->value;
@@ -110,8 +118,23 @@ namespace Control::Greenhouse
       }
 
       void
+      setTankPumps()
+      {
+        IMC::SetThrusterActuation ta;
+
+        ta.id = m_args.irrigation_mtr_id;
+        ta.value = m_dirrigation.value;
+        dispatch(ta);
+
+        ta.id = m_args.air_mtr_id;
+        ta.value = m_dairflow.value;
+        dispatch(ta);
+      }
+
+      void
       task(void)
       {
+        setTankPumps();
       }
     };
   }
