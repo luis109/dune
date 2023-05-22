@@ -59,6 +59,8 @@ namespace Control::Greenhouse
         int vegetative;
         int flowering;
       }period;
+      //! Irrigation period in days
+      double irrigation_period;
     };
 
     //! %Grow Monitor task.
@@ -74,6 +76,8 @@ namespace Control::Greenhouse
       double m_next_light_off;
       //! Light period by stage
       std::map<IMC::PlantState::PlantStageEnum, double> m_light_period;
+      //! Current desired irrigation
+      IMC::DesiredIrrigation m_dirrigation;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx)
@@ -101,6 +105,12 @@ namespace Control::Greenhouse
         .maximumValue("23")
         .description("Flowering \'light on\' period, in hours");
 
+        param("Irrigation Period", m_args.irrigation_period)
+        .defaultValue("12")
+        .minimumValue("0")
+        .description("Period when irrigation is on, in days. "
+                     "Set to 0 to have irrigation always on");
+
         bind<IMC::PlantState>(this);
       }
 
@@ -117,6 +127,11 @@ namespace Control::Greenhouse
           m_light_period[IMC::PlantState::STG_HARVESTING] = m_args.period.flowering;
 
           initializeLightCycle(); 
+        }
+
+        if (paramChanged(m_args.irrigation_period))
+        {
+          initializeTank();
         }
       } 
 
@@ -243,6 +258,39 @@ namespace Control::Greenhouse
 
         debug("Set light to: %f", level);
       }
+
+      void
+      initializeTank()
+      {
+        // Air flow
+        IMC::DesiredAirFlow des_airflow;
+        des_airflow.value = 1;
+        dispatch(des_airflow);
+
+        // Irrigation
+        if (m_args.irrigation_period == 0)
+          m_dirrigation.value = 1;
+        else
+          m_dirrigation.value = m_pstate.days_elapsed < m_args.irrigation_period;
+        dispatch(m_dirrigation);
+      }
+
+      void
+      checkTankCycle()
+      {
+        // Air flow is sent in initialization, should be always on.
+
+        // Irrigation
+        // If set to 0 do not adjust
+        if (m_args.irrigation_period == 0)
+          return;
+
+        // Only send desired message once per change
+        bool irrig_on = m_pstate.days_elapsed < m_args.irrigation_period;
+        if (m_dirrigation.value != irrig_on)
+          m_dirrigation.value = irrig_on;
+        dispatch(m_dirrigation);
+      }
  
       void
       onMain(void)
@@ -251,6 +299,7 @@ namespace Control::Greenhouse
         {
           waitForMessages(1.0);
           checkLightCycle();
+          checkTankCycle();
         }
       }
     };
