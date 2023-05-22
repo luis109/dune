@@ -51,15 +51,28 @@ namespace Control::Greenhouse
     //! %Grow Monitor task.
     struct Task: public DUNE::Tasks::Periodic
     {
+      //! State machine states
+      enum TankStates
+      {
+        TS_NORMAL,
+        TS_EMPTYING,
+        TS_REFFILING,
+        TS_NUTRIENT_BALANCE,
+        TS_PH_BALANCE
+      };
+
       //! Task arguments.
       Arguments m_args;
       //! Current desired irrigation
       IMC::DesiredIrrigation m_dirrigation;
       //! Current desired air flow
       IMC::DesiredAirFlow m_dairflow;
+      //! Current tank state
+      TankStates m_tstate;
 
       Task(const std::string& name, Tasks::Context& ctx):
-        Tasks::Periodic(name, ctx)
+        Tasks::Periodic(name, ctx),
+        m_tstate(TS_NORMAL)
       {
         param("Motor Id -- Irrigation", m_args.irrigation_mtr_id)
         .defaultValue("0")
@@ -120,9 +133,45 @@ namespace Control::Greenhouse
       }
 
       void
+      stateMachine()
+      {
+        switch (m_tstate)
+        {
+          case TS_NORMAL:
+            setTankPumps();
+            break;
+
+          case TS_EMPTYING:
+            // Empty tank, watch water level
+            m_tstate = TS_REFFILING;
+            break;
+
+          case TS_REFFILING:
+            // Refill tank, watch water level
+            m_tstate = TS_NUTRIENT_BALANCE;
+            break;
+
+          case TS_NUTRIENT_BALANCE:
+            // Act nutrient pumps for set amount of time each, 
+            // use seperate timers. Change state when all timers done
+            m_tstate = TS_PH_BALANCE;
+            break;
+
+          case TS_PH_BALANCE:
+            // Balance ph, watch Ph message until it enters range
+            m_tstate = TS_NORMAL;
+            break;
+          
+          default:
+            m_tstate = TS_NORMAL;
+            break;
+        }
+      }
+
+      void
       task(void)
       {
-        setTankPumps();
+        stateMachine();
       }
     };
   }
