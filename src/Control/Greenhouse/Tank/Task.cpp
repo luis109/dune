@@ -97,24 +97,12 @@ namespace Control::Greenhouse
       consume(const IMC::DesiredIrrigation* msg)
       {
         m_dirrigation = *msg;
-
-        IMC::SetThrusterActuation ta;
-        ta.id = m_args.irrigation_mtr_id;
-        ta.value = msg->value;
-
-        dispatch(ta);
       }
 
       void
       consume(const IMC::DesiredAirFlow* msg)
       {
         m_dairflow = *msg;
-
-        IMC::SetThrusterActuation ta;
-        ta.id = m_args.air_mtr_id;
-        ta.value = msg->value;
-
-        dispatch(ta);
       }
 
       void
