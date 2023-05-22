@@ -287,8 +287,10 @@ namespace Control::Greenhouse
 
         // Only send desired message once per change
         bool irrig_on = m_pstate.days_elapsed < m_args.irrigation_period;
-        if (m_dirrigation.value != irrig_on)
-          m_dirrigation.value = irrig_on;
+        if (m_dirrigation.value == irrig_on)
+          return;
+          
+        m_dirrigation.value = irrig_on;
         dispatch(m_dirrigation);
       }
  
