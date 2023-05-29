@@ -36,7 +36,7 @@
 
 namespace Transports
 {
-  //! Insert short task description here.
+  //! This task transports IMC messages as MQTT messages.
   //! This task requires libmosquitto-dev.
   //! Install using sudo apt install libmosquitto-dev
   //!
@@ -208,7 +208,9 @@ namespace Transports
       onMessage(char *topic, uint8_t *payload, uint32_t payload_length)
       {
         IMC::Message* msg = IMC::Packet::deserialize(payload, payload_length);
-        // dispatch(msg, DF_KEEP_TIME | DF_KEEP_SRC_EID);
+        
+        if (msg->getSource() != getSystemId())
+          dispatch(msg, DF_KEEP_TIME | DF_KEEP_SRC_EID);
 
         if (getDebugLevel() >= DEBUG_LEVEL_SPEW)
         {
