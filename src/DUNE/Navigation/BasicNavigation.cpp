@@ -523,8 +523,8 @@ namespace DUNE
 
       if (m_gps_disable== true)
         return;
-      if (msg->type == IMC::GpsFix::GFT_MANUAL_INPUT)
-        return;
+      // if (msg->type == IMC::GpsFix::GFT_MANUAL_INPUT)
+      //   return;
 
       // GpsFix validation.
       m_gps_rej.utc_time = msg->utc_time;
