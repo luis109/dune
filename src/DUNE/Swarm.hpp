@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2023 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2019 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -24,28 +24,18 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Eduardo Marques                                                  *
+// Author: Luís Venâncio                                                    *
 //***************************************************************************
 
-#ifndef DUNE_MANEUVERS_HPP_INCLUDED_
-#define DUNE_MANEUVERS_HPP_INCLUDED_
+#ifndef DUNE_SWARM_HPP_INCLUDED_
+#define DUNE_SWARM_HPP_INCLUDED_
 
 namespace DUNE
 {
-  //! %Maneuver routines and classes.
-  namespace Maneuvers
+  namespace Swarm
   { }
 }
 
-#include <DUNE/Maneuvers/Maneuver.hpp>
-#include <DUNE/Maneuvers/FollowTrajectory.hpp>
-#include <DUNE/Maneuvers/VehicleFormation.hpp>
-#include <DUNE/Maneuvers/SwarmLeader.hpp>
-#include <DUNE/Maneuvers/RowsStages.hpp>
-#include <DUNE/Maneuvers/StationKeep.hpp>
-#include <DUNE/Maneuvers/AbstractLoiter.hpp>
-#include <DUNE/Maneuvers/Circular.hpp>
-#include <DUNE/Maneuvers/FigureEight.hpp>
-#include <DUNE/Maneuvers/Elevate.hpp>
+#include <DUNE/Swarm/AcousticProtocol.hpp>
 
 #endif

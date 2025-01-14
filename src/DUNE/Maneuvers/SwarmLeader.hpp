@@ -24,11 +24,11 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Eduardo Marques                                                  *
+// Author: Luis Venâncio                                                    *
 //***************************************************************************
 
-#ifndef DUNE_MANEUVERS_LEADER_FOLLOWERS_HPP_INCLUDED_
-#define DUNE_MANEUVERS_LEADER_FOLLOWERS_HPP_INCLUDED_
+#ifndef DUNE_MANEUVERS_SWARM_LEADER_HPP_INCLUDED_
+#define DUNE_MANEUVERS_SWARM_LEADER_HPP_INCLUDED_
 
 // ISO C++ 98 headers.
 #include <vector>
@@ -46,17 +46,17 @@ namespace DUNE
     // class DUNE_DLL_SYM LeaderFollowers;
 
     //! Abstract base class for vehicle formation maneuver tasks.
-    class LeaderFollowers: public Maneuver
+    class SwarmLeader: public Maneuver
     {
     public:
       //! Constructor.
       //! @param name name.
       //! @param ctx context.
-      LeaderFollowers(const std::string& name, Tasks::Context& ctx);
+      SwarmLeader(const std::string& name, Tasks::Context& ctx);
 
       //! Destructor.
       virtual
-      ~LeaderFollowers(void);
+      ~SwarmLeader(void);
 
       virtual void
       onUpdateParameters(void);
@@ -74,17 +74,6 @@ namespace DUNE
       {
         (void)msg;
       }
-
-      //! Consumer for IMC::RemoteState message.
-      //! @param msg message
-      void
-      consume(const IMC::RemoteState* msg);
-
-      //! Abstract method invoked upon a remote state update.
-      //! @param index formation index of remote vehicle
-      //! @param rstate state of remote vehicle
-      virtual void
-      onUpdate(int index, const IMC::RemoteState& rstate) = 0;
 
       //! Consumer for IMC::EstimatedState message.
       //! @param msg message
@@ -141,6 +130,13 @@ namespace DUNE
         return m_traj.size();
       }
 
+      //! Get number of points in the trajetory.
+      inline const TPoint&
+      trajectory_point(int index) const
+      {
+        return m_traj[index];
+      }
+
       //! Participant data (per vehicle in the formation).
       struct Participant
       {
@@ -167,22 +163,6 @@ namespace DUNE
         return m_participants[index];
       }
 
-      //! Get configuration of local vehicle in formation.
-      //! @return participant data for local vehicle
-      inline const Participant&
-      self(void)
-      {
-        return m_participants[m_fidx];
-      }
-
-      //! Get index of local vehicle in formation.
-      //! @return formation index.
-      inline int
-      formation_index(void) const
-      {
-        return m_fidx;
-      }
-
       //! Get index of given IMC address in formation.
       //! @return formation index.
       inline int
@@ -194,14 +174,6 @@ namespace DUNE
           return 0xFFFF;
 
         return itr->second;
-      }
-
-      //! Get control step period.
-      //! @return control step period.
-      inline double
-      controlPeriod(void) const
-      {
-        return m_cstep_period;
       }
 
       //! Check if maneuver is still in approach stage (i.e. moving to the initial point).
@@ -221,16 +193,16 @@ namespace DUNE
       void
       toLocalCoordinates(double lat, double lon, double* x, double* y);
 
+      void
+      fromLocalCoordinates(double x, double y, double* lat, double* lon);
+
     private:
       std::vector<TPoint> m_traj; //!< Trajectory points.
       std::vector<Participant> m_participants; //!< Trajectory points.
       std::map<int, int> m_addr2idx;
       bool m_approach; //!< Approach stage flag.
-      int m_fidx; //!< Formation index.
       double m_rlat; // Reference latitude set.
       double m_rlon; // Reference longitude set.
-      double m_cstep_period; //! control step period
-      double m_cstep_time; //! time of last control step
       IMC::DesiredPath m_path;
       IMC::DesiredZ m_depth;
 
