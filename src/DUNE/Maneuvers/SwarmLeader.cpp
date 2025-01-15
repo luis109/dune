@@ -157,8 +157,6 @@ namespace DUNE
       m_path.speed = msg->speed;
       m_path.speed_units = msg->speed_units;
 
-      dispatch(m_path);
-
       m_approach = true; // signal approach stage
 
       onInit(msg);
@@ -180,6 +178,7 @@ namespace DUNE
     SwarmLeader::consume(const IMC::EstimatedState* msg)
     {
       step(*msg);
+      m_estate = *msg;
       m_rlat = msg->lat;
       m_rlon = msg->lon;
     }
@@ -254,10 +253,24 @@ namespace DUNE
 
         Coordinates::toPolar(v, &bearing, &range);
 
-        if ((size_t)t_index < trajectory_points() - 1)
-          bearing += Coordinates::getBearing(p, m_traj[t_index + 1]);
+        if ((size_t)t_index == 0)
+        {
+          TPoint start;
+          start.x = m_estate.x;
+          start.y = m_estate.y;
+          start.z = m_estate.depth;
+
+          bearing += Coordinates::getBearing(start, p);
+        }
         else
-          bearing += Coordinates::getBearing(m_traj[t_index - 2], p);
+        {
+          bearing += Coordinates::getBearing(m_traj[t_index - 1], p);
+        }
+
+        // if ((size_t)t_index < trajectory_points() - 1)
+        //   bearing += Coordinates::getBearing(p, m_traj[t_index + 1]);
+        // else
+        //   bearing += Coordinates::getBearing(m_traj[t_index - 2], p);
 
         Coordinates::displace(p, bearing, range);
         p.z += v.z;

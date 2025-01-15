@@ -52,31 +52,62 @@ namespace Maneuver
       {
         //! last state update
         IMC::EstimatedState m_estate;
-        //! Circular Buffer fixed size
-        static const int c_queue_size = 20;
         //! Number of current waypoint number
         int m_curr;
         //! Previously assigned waypoint
         TPoint m_prev;
-        //! Circular buffer used to save last few estimated states every second
-        Utils::CircularBuffer<IMC::EstimatedState> m_queue;
         //! Task arguments
         Arguments m_args;
         //! Swarm acoustic protocol
         Swarm::AcousticProtocol m_aprot;
+        //! Acknowledgement timer
+        Time::Counter<double> m_ack_timer;
+        //! Received ack id
+        uint16_t m_rcv_ack_id;
 
         Task(const std::string& name, DUNE::Tasks::Context& ctx):
           SwarmLeader(name, ctx),
-          m_queue(c_queue_size),
-          m_aprot(this)
+          m_aprot(this),
+          m_rcv_ack_id(IMC::AddressResolver::invalid())
         {
-
+          bind<IMC::UamRxFrame>(this, true);
         }
 
         void
         onUpdateParameters(void)
         {
           SwarmLeader::onUpdateParameters();
+        }
+
+        //! On resource initialization
+        void
+        onResourceInitialization(void)
+        {
+          Maneuver::onResourceInitialization();
+          m_ack_timer.setTop(10);
+        }
+
+        void
+        consume(const IMC::UamRxFrame * msg)
+        {
+          if (!m_aprot.validate(msg))
+            return;
+
+          switch (msg->data[1])
+          {
+            case CODE_ACK:
+              recvAck(msg);
+              break;
+            default:
+              debug("Invalid acoustic code: %u", msg->data[1]);
+              break;
+          }
+        }
+
+        void
+        recvAck(const IMC::UamRxFrame* msg)
+        {
+          m_rcv_ack_id = resolveSystemName(msg->sys_src);
         }
 
         //! Close matlab logged vectors
@@ -90,41 +121,85 @@ namespace Maneuver
         {
           (void)maneuver;
 
-          m_prev = point(0, -1); //Initiate m_prev as first waypoint
+          //Initiate m_prev as first waypoint
+          m_prev = point(0, -1);
 
           // Initiate waypoint counter at zero
           m_curr = 0;
 
+          // Send participant setups and wait for acknowledgement
+          setupParticipants();
+
+          // Send participants next point
+          sendNextPoint();
+
+          // Send initial DesiredPath
+          IMC::DesiredPath path = getDesiredPath();
+          dispatch(path);
+
+          ++m_curr;
+        }
+
+        void
+        sendNextPoint()
+        {
           for(size_t i = 0; i < participants(); i++)
           {
             Participant part = participant(i);
-            TPoint initial_ref = point(0, i);
+            TPoint initial_ref = point(m_curr, i);
             double lat = 0;
             double lon = 0; 
             fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
 
             m_aprot.sendNext(resolveSystemId(part.vid), lat, lon);
           }
+        }
 
-          ++m_curr;
+        void
+        setupParticipants()
+        {
+          for(size_t i = 0; i < participants(); i++)
+          {
+            Participant part = participant(i);
+
+            int retries = 0;
+            while (retries < 5)
+            {
+              m_aprot.sendSetup(resolveSystemId(part.vid), i, part.x, part.y, part.z);
+              if (waitAck(part.vid))
+              {
+                war("RECEIVED ACK");
+                break;
+              }
+              else
+                retries++;
+            }
+          }
+        }
+
+        bool
+        waitAck(uint16_t sys_id)
+        {
+          m_rcv_ack_id = IMC::AddressResolver::invalid();
+          m_ack_timer.reset();
+          while (!m_ack_timer.overflow())
+          {
+            waitForMessages(1.0);
+
+            if (sys_id == m_rcv_ack_id)
+            {
+               m_rcv_ack_id = IMC::AddressResolver::invalid();
+               return true;
+            }
+          }
+
+          m_rcv_ack_id = IMC::AddressResolver::invalid();
+          return false;
         }
 
         void
         step(const IMC::EstimatedState& estate)
         {
-          // save Estimated States into queue everytime formation_control runs
-          // ... queue is assumed to be a collection of Estimated States of the present vehicle with 1.0 sec step between timestamps
-
-          if (!m_queue.getSize()) // also means that it is the first time this function was called
-          {
-            m_queue.add(estate);
-          }
-          // this statement compares the received estimated_state with the last one saved in the queue
-          else if (estate.getTimeStamp() - m_queue(m_queue.getSize() - 1).getTimeStamp() >= 1.0)
-          {
-            m_queue.add(estate);
-          }
-
           m_estate = estate;
         }
 
@@ -155,22 +230,11 @@ namespace Maneuver
           // next.y = point(m_curr,formation_index()).y + m_delta(1);
           next = point(m_curr, -1);
 
-          // How do we use t?
-          // next.t = point(m_curr, formation_index()).t - m_args.kf* m_delta(0);
+          // Send next point to participants
+          sendNextPoint();
 
           // throw a leg of TPoints to be followed by the vehicle
           desiredPath(m_prev, next);
-
-          for(size_t i = 0; i < participants(); i++)
-          {
-            Participant part = participant(i);
-            TPoint initial_ref = point(m_curr, i);
-            double lat = 0;
-            double lon = 0; 
-            fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
-
-            m_aprot.sendNext(resolveSystemId(part.vid), lat, lon);
-          }
 
           ++m_curr;
           m_prev = next;

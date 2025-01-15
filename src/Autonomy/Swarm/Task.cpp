@@ -41,7 +41,7 @@ namespace Autonomy
     struct Arguments
     {
       //! T-REX IMC identifier.
-      std::string follower_label;
+      uint16_t follower_id;
       //! Time threshold after which communication with TREX is considered lost
       uint16_t connection_timeout;
       //! Threshold (meters) after which the vehicle is considered to have arrived
@@ -53,8 +53,6 @@ namespace Autonomy
     {
       //! Task arguments.
       Arguments m_args;
-      //! Follower entity id
-      unsigned int m_follower_id;
       //! Swarm acoustic protocol
       Swarm::AcousticProtocol m_aprot;
       //! Reference latitude
@@ -65,6 +63,17 @@ namespace Autonomy
       bool m_started;
       //! Reference timer
       Counter<double> m_ref_timer;
+      //! Formation id
+      uint8_t m_formation_id;
+      //! Formation offset
+      struct Point
+      {
+        float x;
+        float y;
+        float z;
+      };
+      Point m_formation_offset;
+
 
       Task(const std::string& name, Tasks::Context& ctx) :
         DUNE::Tasks::Task(name, ctx),
@@ -77,8 +86,8 @@ namespace Autonomy
         paramActive(Tasks::Parameter::SCOPE_GLOBAL,
                     Tasks::Parameter::VISIBILITY_USER, false);
 
-        param("Follower Label", m_args.follower_label)
-        .defaultValue("Follower");
+        param("Follower ID", m_args.follower_id)
+        .defaultValue("0x7000");
 
         param("Connection Timeout", m_args.connection_timeout)
         .defaultValue("60")
@@ -105,7 +114,6 @@ namespace Autonomy
       void
       onEntityReservation(void)
       {
-        m_follower_id = reserveEntity(m_args.follower_label);
       }
 
       void
@@ -176,6 +184,9 @@ namespace Autonomy
           case CODE_NEXT:
             recvNext(msg);
             break;
+          case CODE_SETUP:
+            recvSetup(msg);
+            break;
           default:
             debug("Invalid acoustic code: %u", msg->data[1]);
             break;
@@ -185,7 +196,7 @@ namespace Autonomy
       void
       recvNext(const IMC::UamRxFrame* msg)
       {
-        Point p;
+        DUNE::Swarm::Point p;
         std::memcpy(&p, &msg->data[2], sizeof(p));
 
         m_ref_lat = p.lat;
@@ -196,6 +207,27 @@ namespace Autonomy
 
         startExecution();
         m_started = true;
+      }
+
+      void
+      recvSetup(const IMC::UamRxFrame* msg)
+      {
+        Setup setup;
+        std::memcpy(&setup, &msg->data[2], sizeof(setup));
+
+        m_formation_id = setup.formation_id;
+        m_formation_offset.x = setup.offset_x;
+        m_formation_offset.y = setup.offset_y;
+        m_formation_offset.z = setup.offset_z;
+
+        war("SETUP RECEIVED %d, %f, %f, %f", m_formation_id,
+                                             m_formation_offset.x,
+                                             m_formation_offset.y,
+                                             m_formation_offset.z);
+
+        m_aprot.sendAck(msg->sys_src);
+
+        // startExecution();
       }
 
       void
@@ -223,7 +255,7 @@ namespace Autonomy
         startPlan.plan_id = "follower_plan";
         IMC::FollowReference man;
         man.control_ent = 255;
-        man.control_src = m_follower_id;
+        man.control_src = m_args.follower_id;
         man.altitude_interval = m_args.altitude_interval;
         man.timeout = m_args.connection_timeout + 10;
 
@@ -270,7 +302,7 @@ namespace Autonomy
         speed.value = 1.0;
 
         IMC::Reference ref;
-        ref.setSource(m_follower_id);
+        ref.setSource(m_args.follower_id);
         ref.setSourceEntity(255);
         ref.lat = m_ref_lat;
         ref.lon = m_ref_lon;

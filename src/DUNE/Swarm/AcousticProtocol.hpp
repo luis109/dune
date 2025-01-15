@@ -41,8 +41,9 @@ namespace DUNE
 
     enum Codes
     {
-      CODE_SETUP  = 0x00,
-      CODE_NEXT   = 0x01
+      CODE_ACK    = 0x00,
+      CODE_SETUP  = 0x01,
+      CODE_NEXT   = 0x02
     };
 
     struct Point
@@ -69,7 +70,7 @@ namespace DUNE
       { }
 
       void
-      sendNext(const std::string& sys, float lat, float lon)
+      sendNext(const std::string& sys, const float lat, const float lon)
       {
         std::vector<uint8_t> data;
 
@@ -81,6 +82,33 @@ namespace DUNE
         data[0] = CODE_NEXT;
         std::memcpy(&data[1], &p, sizeof(p));
 
+        sendFrame(sys, 0, data, false);
+      }
+
+      void
+      sendSetup(const std::string& sys, const uint8_t formation_id, 
+                const float offset_x, const float offset_y, const float offset_z)
+      {
+        std::vector<uint8_t> data;
+
+        Setup setup;
+        setup.formation_id = formation_id;
+        setup.offset_x = offset_x;
+        setup.offset_y = offset_y;
+        setup.offset_z = offset_z;
+
+        data.resize(sizeof(setup) + 1);
+        data[0] = CODE_SETUP;
+        std::memcpy(&data[1], &setup, sizeof(setup));
+
+        sendFrame(sys, 0, data, false);
+      }
+
+      void
+      sendAck(const std::string& sys)
+      {
+        std::vector<uint8_t> data;
+        data.push_back(CODE_ACK);
         sendFrame(sys, 0, data, false);
       }
 
@@ -122,7 +150,6 @@ namespace DUNE
         try
         {
           imc_addr_src = m_task->resolveSystemName(msg->sys_src);
-          war(DUNE::Utils::String::str("Received msg from: %s", msg->sys_src.c_str()));
         }
         catch (...)
         {
@@ -136,7 +163,6 @@ namespace DUNE
         try
         {
           imc_addr_dst = m_task->resolveSystemName(msg->sys_dst);
-          war(DUNE::Utils::String::str("Received msg destination: %s", msg->sys_dst.c_str()));
         }
         catch (...)
         {
@@ -144,7 +170,7 @@ namespace DUNE
           return false;
         }
 
-        (void)imc_addr_dst;
+        // (void)imc_addr_dst;
 
         if ((uint8_t)msg->data[0] != c_sync)
         {
@@ -160,7 +186,7 @@ namespace DUNE
           return false;
         }
 
-        return true;
+        return (msg->sys_dst == "broadcast" || imc_addr_dst == m_task->getSystemId());
       }
 
     private:

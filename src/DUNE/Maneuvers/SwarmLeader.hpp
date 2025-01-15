@@ -196,6 +196,12 @@ namespace DUNE
       void
       fromLocalCoordinates(double x, double y, double* lat, double* lon);
 
+      IMC::DesiredPath
+      getDesiredPath()
+      {
+        return m_path;
+      }
+
     private:
       std::vector<TPoint> m_traj; //!< Trajectory points.
       std::vector<Participant> m_participants; //!< Trajectory points.
@@ -205,6 +211,7 @@ namespace DUNE
       double m_rlon; // Reference longitude set.
       IMC::DesiredPath m_path;
       IMC::DesiredZ m_depth;
+      IMC::EstimatedState m_estate;
 
       bool
       initParticipants(const IMC::VehicleFormation*);
