@@ -123,6 +123,9 @@ namespace DUNE
       TPoint
       point(int t_index, int f_index = -1) const;
 
+      float
+      bearing(int t_index) const;
+
       //! Get number of points in the trajetory.
       inline size_t
       trajectory_points(void) const

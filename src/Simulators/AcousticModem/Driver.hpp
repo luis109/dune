@@ -335,6 +335,8 @@ namespace Simulators
       bool
       deliverySucceeds(double distance, uint16_t data_size)
       {
+        return true;
+
         // Out of range
         if (distance > c_max_range)
           return false;

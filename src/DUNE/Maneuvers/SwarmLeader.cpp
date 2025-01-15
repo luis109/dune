@@ -278,5 +278,27 @@ namespace DUNE
 
       return p;
     }
+
+    float
+    SwarmLeader::bearing(int t_index) const
+    {
+      TPoint p = m_traj[t_index];
+
+      if ((size_t)t_index == 0)
+      {
+        TPoint start;
+        start.x = m_estate.x;
+        start.y = m_estate.y;
+        start.z = m_estate.depth;
+
+        return Coordinates::getBearing(start, p);
+      }
+      else
+      {
+        return Coordinates::getBearing(m_traj[t_index - 1], p);
+      }
+
+      return 0;
+    }
   }
 }

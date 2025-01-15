@@ -55,6 +55,8 @@ namespace Autonomy
       Arguments m_args;
       //! Swarm acoustic protocol
       Swarm::AcousticProtocol m_aprot;
+      //! Reference heading
+      float m_ref_heading;
       //! Reference latitude
       float m_ref_lat;
       //! Reference longitude
@@ -73,14 +75,20 @@ namespace Autonomy
         float z;
       };
       Point m_formation_offset;
+      //! Current Estimated State
+      IMC::EstimatedState m_estate;
+      //! Got valid reference
+      bool m_got_ref;
 
 
       Task(const std::string& name, Tasks::Context& ctx) :
         DUNE::Tasks::Task(name, ctx),
         m_aprot(this),
+        m_ref_heading(0),
         m_ref_lat(0),
         m_ref_lon(0),
-        m_started(false)
+        m_started(false),
+        m_got_ref(false)
       {
         // Define configuration parameters.
         paramActive(Tasks::Parameter::SCOPE_GLOBAL,
@@ -98,11 +106,13 @@ namespace Autonomy
         .minimumValue("0");
 
         // Register consumers.
+        bind<IMC::EstimatedState>(this);
         bind<IMC::VehicleState>(this);
         bind<IMC::PlanControlState>(this);
         bind<IMC::Abort>(this);
         bind<IMC::PlanControl>(this);
         bind<IMC::UamRxFrame>(this);
+        bind<IMC::FollowRefState>(this);
       }
 
       void
@@ -137,6 +147,19 @@ namespace Autonomy
         // if the vehicle is in error mode, T-REX payload becomes inactive
         if (msg->op_mode == IMC::VehicleState::VS_ERROR)
           requestDeactivation();
+      }
+
+      void
+      consume(const IMC::FollowRefState * msg)
+      {
+        if (msg->proximity & IMC::FollowRefState::PROX_XY_NEAR)
+          war("PROXIMITY NEAR");
+      }
+
+      void
+      consume(const IMC::EstimatedState * msg)
+      {
+        m_estate = *msg;
       }
 
       void
@@ -199,14 +222,11 @@ namespace Autonomy
         DUNE::Swarm::Point p;
         std::memcpy(&p, &msg->data[2], sizeof(p));
 
+        m_ref_heading = p.heading;
         m_ref_lat = p.lat;
         m_ref_lon = p.lon;
 
-        if (m_started)
-          return;
-
-        startExecution();
-        m_started = true;
+        m_got_ref = true;
       }
 
       void
@@ -227,7 +247,11 @@ namespace Autonomy
 
         m_aprot.sendAck(msg->sys_src);
 
-        // startExecution();
+        if (m_started)
+          return;
+
+        startExecution();
+        m_started = true;
       }
 
       void
@@ -293,6 +317,22 @@ namespace Autonomy
         if (!m_started)
           return;
 
+        if (!m_got_ref)
+          return;
+
+        Point offset;
+        toLocalCoordinates(m_ref_lat, m_ref_lon, &offset.x, &offset.y);
+
+        double bearing;
+        double range;
+        Coordinates::toPolar(m_formation_offset, &bearing, &range);
+        bearing += m_ref_heading;
+        Coordinates::displace(offset, bearing, range);
+
+        double lat;
+        double lon;
+        fromLocalCoordinates(offset.x, offset.y, &lat, &lon);
+
         IMC::DesiredZ z;
         z.z_units = IMC::ZUnits::Z_DEPTH;
         z.value = 0.0;
@@ -304,8 +344,8 @@ namespace Autonomy
         IMC::Reference ref;
         ref.setSource(m_args.follower_id);
         ref.setSourceEntity(255);
-        ref.lat = m_ref_lat;
-        ref.lon = m_ref_lon;
+        ref.lat = lat;
+        ref.lon = lon;
         ref.z.set(&z);
         ref.speed.set(&speed);
         ref.flags = IMC::Reference::FLAG_LOCATION | 
@@ -313,6 +353,20 @@ namespace Autonomy
                      IMC::Reference::FLAG_SPEED;
 
         dispatch(ref);
+      }
+
+      void
+      toLocalCoordinates(double lat, double lon, float* x, float* y)
+      {
+        Coordinates::WGS84::displacement(m_estate.lat, m_estate.lon, 0, lat, lon, 0, x, y);
+      }
+
+      void
+      fromLocalCoordinates(double x, double y, double* lat, double* lon)
+      {
+        *lat = m_estate.lat;
+        *lon = m_estate.lon;
+        Coordinates::WGS84::displace(x, y, lat, lon);
       }
 
       void

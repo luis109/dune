@@ -143,16 +143,21 @@ namespace Maneuver
         void
         sendNextPoint()
         {
-          for(size_t i = 0; i < participants(); i++)
-          {
-            Participant part = participant(i);
-            TPoint initial_ref = point(m_curr, i);
-            double lat = 0;
-            double lon = 0; 
-            fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
+          TPoint initial_ref = point(m_curr, -1);
+          double lat = 0;
+          double lon = 0; 
+          fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
+          m_aprot.sendNext("broadcast", bearing(m_curr), lat, lon);
+          // for(size_t i = 0; i < participants(); i++)
+          // {
+          //   Participant part = participant(i);
+          //   TPoint initial_ref = point(m_curr, i);
+          //   double lat = 0;
+          //   double lon = 0; 
+          //   fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
 
-            m_aprot.sendNext(resolveSystemId(part.vid), lat, lon);
-          }
+          //   m_aprot.sendNext(resolveSystemId(part.vid), lat, lon);
+          // }
         }
 
         void

@@ -48,6 +48,7 @@ namespace DUNE
 
     struct Point
     {
+      float heading;
       float lat;
       float lon;
     };
@@ -70,11 +71,12 @@ namespace DUNE
       { }
 
       void
-      sendNext(const std::string& sys, const float lat, const float lon)
+      sendNext(const std::string& sys, const float heading, const float lat, const float lon)
       {
         std::vector<uint8_t> data;
 
         Point p;
+        p.heading = heading;
         p.lat = lat;
         p.lon = lon;
 
