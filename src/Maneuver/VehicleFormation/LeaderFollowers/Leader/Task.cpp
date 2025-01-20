@@ -90,7 +90,7 @@ namespace Maneuver
             m_prev = point(0, formation_index()); //Initiate m_prev as first waypoint
 
             // Initiate waypoint counter at zero
-            m_curr = 0;
+            m_curr = 1;
           }
 
           void
@@ -102,19 +102,6 @@ namespace Maneuver
           void
           step(const IMC::EstimatedState& estate)
           {
-            // save Estimated States into queue everytime formation_control runs
-            // ... queue is assumed to be a collection of Estimated States of the present vehicle with 1.0 sec step between timestamps
-
-            if (!m_queue.getSize()) // also means that it is the first time this function was called
-            {
-              m_queue.add(estate);
-            }
-            // this statement compares the received estimated_state with the last one saved in the queue
-            else if (estate.getTimeStamp() - m_queue(m_queue.getSize() - 1).getTimeStamp() >= 1.0)
-            {
-              m_queue.add(estate);
-            }
-
             m_estate = estate;
           }
 
@@ -143,9 +130,11 @@ namespace Maneuver
             // offset by a certain amount m_delta, updated when a new message is received
             // next.x = point(m_curr,formation_index()).x + m_delta(0);
             // next.y = point(m_curr,formation_index()).y + m_delta(1);
-            next.x = point(m_curr, formation_index()).x;
-            next.y = point(m_curr, formation_index()).y;
-            next.z = point(m_curr, formation_index()).z;
+            next = point(m_curr, formation_index());
+
+            // next.y += 10;
+
+            war("Final final point: %f, %f, %f", next.x, next.y, next.z);
 
             // How do we use t?
             // next.t = point(m_curr, formation_index()).t - m_args.kf* m_delta(0);

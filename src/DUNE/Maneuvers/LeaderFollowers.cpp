@@ -39,12 +39,6 @@ namespace DUNE
     LeaderFollowers::LeaderFollowers(const std::string& name, Tasks::Context& ctx):
       Maneuver(name, ctx)
     {
-      // Control step period is ignored if negative
-      param("Control Step Frequency", m_cstep_period)
-      .units(Units::Hertz)
-      .defaultValue("-1.0")
-      .description("Ignored on negative values");
-
       bindToManeuver<LeaderFollowers, IMC::VehicleFormation>();
       bind<IMC::EstimatedState>(this, true);
       bind<IMC::RemoteState>(this);
@@ -56,7 +50,7 @@ namespace DUNE
     void
     LeaderFollowers::onUpdateParameters(void)
     {
-      m_cstep_period = 1.0 / m_cstep_period;
+
     }
 
     bool
@@ -132,7 +126,7 @@ namespace DUNE
 
       IMC::MessageList<IMC::TrajectoryPoint>::const_iterator itr;
 
-      for(itr = list->begin() + 1; itr != list->end(); itr++)
+      for(itr = list->begin(); itr != list->end(); itr++)
       {
         TPoint p;
         p.x = (*itr)->x + begin.x;
@@ -252,6 +246,7 @@ namespace DUNE
 
       m_path.end_lat = m_rlat;
       m_path.end_lon = m_rlon;
+      war("Final final final: %f, %f", e.x, e.y);
       Coordinates::WGS84::displace(e.x, e.y, &m_path.end_lat, &m_path.end_lon);
       m_path.end_z = e.z;
 
@@ -274,9 +269,11 @@ namespace DUNE
     }
 
     LeaderFollowers::TPoint
-    LeaderFollowers::point(int t_index, int f_index) const
+    LeaderFollowers::point(int t_index, int f_index)
     {
       TPoint p = m_traj[t_index];
+
+      war("Initial point: %f, %f, %f", p.x, p.y, p.z);
 
       if (f_index >= 0)
       {
@@ -294,7 +291,10 @@ namespace DUNE
 
         Coordinates::displace(p, bearing, range);
         p.z += v.z;
+        war("Displaced");
       }
+
+      war("Final point: %f, %f, %f", p.x, p.y, p.z);
 
       return p;
     }
