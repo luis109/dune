@@ -64,6 +64,8 @@ namespace Maneuver
         Time::Counter<double> m_ack_timer;
         //! Received ack id
         uint16_t m_rcv_ack_id;
+        //! Report position timer
+        Time::Counter<double> m_pos_report_timer;
 
         Task(const std::string& name, DUNE::Tasks::Context& ctx):
           SwarmLeader(name, ctx),
@@ -85,6 +87,7 @@ namespace Maneuver
         {
           Maneuver::onResourceInitialization();
           m_ack_timer.setTop(10);
+          m_pos_report_timer.setTop(10);
         }
 
         void
@@ -117,6 +120,15 @@ namespace Maneuver
         }
 
         void
+        sendNextPoint(const TPoint& next)
+        {
+          double lat;
+          double lon;
+          fromLocalCoordinates(next.x, next.y, &lat, &lon);
+          m_aprot.sendNext("broadcast", bearing(m_curr), lat, lon);
+        }
+
+        void
         onInit(const IMC::VehicleFormation* maneuver)
         {
           (void)maneuver;
@@ -131,33 +143,15 @@ namespace Maneuver
           setupParticipants();
 
           // Send participants next point
-          sendNextPoint();
+          sendNextPoint(m_prev);
 
           // Send initial DesiredPath
           IMC::DesiredPath path = getDesiredPath();
           dispatch(path);
 
           ++m_curr;
-        }
 
-        void
-        sendNextPoint()
-        {
-          TPoint initial_ref = point(m_curr, -1);
-          double lat = 0;
-          double lon = 0; 
-          fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
-          m_aprot.sendNext("broadcast", bearing(m_curr), lat, lon);
-          // for(size_t i = 0; i < participants(); i++)
-          // {
-          //   Participant part = participant(i);
-          //   TPoint initial_ref = point(m_curr, i);
-          //   double lat = 0;
-          //   double lon = 0; 
-          //   fromLocalCoordinates(initial_ref.x, initial_ref.y, &lat, &lon);
-
-          //   m_aprot.sendNext(resolveSystemId(part.vid), lat, lon);
-          // }
+          m_pos_report_timer.reset();
         }
 
         void
@@ -172,10 +166,7 @@ namespace Maneuver
             {
               m_aprot.sendSetup(resolveSystemId(part.vid), i, part.x, part.y, part.z);
               if (waitAck(part.vid))
-              {
-                war("RECEIVED ACK");
                 break;
-              }
               else
                 retries++;
             }
@@ -206,6 +197,18 @@ namespace Maneuver
         step(const IMC::EstimatedState& estate)
         {
           m_estate = estate;
+
+          if (m_curr <= 0)
+            return;
+          
+          if (m_pos_report_timer.overflow())
+          {
+            double lat;
+            double lon;
+            fromLocalCoordinates(m_estate.x, m_estate.y, &lat, &lon);
+            m_aprot.sendPos("broadcast", m_estate.psi, lat, lon);
+            m_pos_report_timer.reset();
+          }
         }
 
         void
@@ -236,7 +239,7 @@ namespace Maneuver
           next = point(m_curr, -1);
 
           // Send next point to participants
-          sendNextPoint();
+          sendNextPoint(next);
 
           // throw a leg of TPoints to be followed by the vehicle
           desiredPath(m_prev, next);

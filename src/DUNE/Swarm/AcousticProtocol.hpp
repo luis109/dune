@@ -43,7 +43,8 @@ namespace DUNE
     {
       CODE_ACK    = 0x00,
       CODE_SETUP  = 0x01,
-      CODE_NEXT   = 0x02
+      CODE_NEXT   = 0x02,
+      CODE_POS    = 0x03
     };
 
     struct Point
@@ -69,6 +70,23 @@ namespace DUNE
       AcousticProtocol(Tasks::Task* task):
         m_task(task)
       { }
+
+      void
+      sendPos(const std::string& sys, const float heading, const float lat, const float lon)
+      {
+        std::vector<uint8_t> data;
+
+        Point p;
+        p.heading = heading;
+        p.lat = lat;
+        p.lon = lon;
+
+        data.resize(sizeof(p) + 1);
+        data[0] = CODE_POS;
+        std::memcpy(&data[1], &p, sizeof(p));
+
+        sendFrame(sys, 0, data, false);
+      }
 
       void
       sendNext(const std::string& sys, const float heading, const float lat, const float lon)

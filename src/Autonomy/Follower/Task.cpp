@@ -33,7 +33,7 @@
 namespace Autonomy
 {
   //! %TREX is responsible to interact with MBARI's T-REX
-  namespace Swarm
+  namespace Follower
   {
     using DUNE_NAMESPACES;
 
@@ -44,9 +44,6 @@ namespace Autonomy
       uint16_t follower_id;
       //! Time threshold after which communication with TREX is considered lost
       uint16_t connection_timeout;
-      //! Threshold (meters) after which the vehicle is considered to have arrived
-      //! at destination in the vertical plane.
-      uint16_t altitude_interval;
     };
 
     struct Task : public DUNE::Tasks::Task
@@ -55,6 +52,8 @@ namespace Autonomy
       Arguments m_args;
       //! Swarm acoustic protocol
       Swarm::AcousticProtocol m_aprot;
+      //! Reference position
+      Swarm::Point m_ref_pos;
       //! Reference heading
       float m_ref_heading;
       //! Reference latitude
@@ -79,6 +78,8 @@ namespace Autonomy
       IMC::EstimatedState m_estate;
       //! Got valid reference
       bool m_got_ref;
+      //! Leader position
+      Swarm::Point m_leader_pos;
 
 
       Task(const std::string& name, Tasks::Context& ctx) :
@@ -99,10 +100,6 @@ namespace Autonomy
 
         param("Connection Timeout", m_args.connection_timeout)
         .defaultValue("60")
-        .minimumValue("0");
-
-        param("FollowReference altitude interval", m_args.altitude_interval)
-        .defaultValue("2")
         .minimumValue("0");
 
         // Register consumers.
@@ -207,6 +204,9 @@ namespace Autonomy
           case CODE_NEXT:
             recvNext(msg);
             break;
+          case CODE_POS:
+            recvPos(msg);
+            break;
           case CODE_SETUP:
             recvSetup(msg);
             break;
@@ -217,14 +217,41 @@ namespace Autonomy
       }
 
       void
+      recvPos(const IMC::UamRxFrame* msg)
+      {
+        std::memcpy(&m_leader_pos, &msg->data[2], sizeof(m_leader_pos));
+
+        war("GOT POS: %f, %f, %f", m_leader_pos.heading, m_leader_pos.lat, m_leader_pos.lon);
+
+        Point ref = {0, 0, 0};
+
+        toLocalCoordinates(m_ref_lat, m_ref_lon, &ref.x, &ref.y);
+
+        Point leader = {0, 0, 0};
+        toLocalCoordinates(m_leader_pos.lat, m_leader_pos.lon, &leader.x, &leader.y);
+
+        Point follower = {0, 0, 0};
+        float lat = m_leader_pos.lat;
+        float lon = m_leader_pos.lon;
+        getFollowerOffset(m_leader_pos.heading, &lat, &lon);
+        toLocalCoordinates(lat, lon, &follower.x, &follower.y);
+
+        war("Ref: %f, %f, %f", ref.x, ref.y, ref.z);
+        war("Leader: %f, %f, %f", leader.x, leader.y, leader.z);
+        war("Follower: %f, %f, %f", follower.x, follower.y, follower.z);
+
+        // m_got_ref = true;
+      }
+
+      void
       recvNext(const IMC::UamRxFrame* msg)
       {
         DUNE::Swarm::Point p;
         std::memcpy(&p, &msg->data[2], sizeof(p));
 
-        m_ref_heading = p.heading;
-        m_ref_lat = p.lat;
-        m_ref_lon = p.lon;
+        m_ref_pos.heading = p.heading;
+        m_ref_pos.lat = p.lat;
+        m_ref_pos.lon = p.lon;
 
         m_got_ref = true;
       }
@@ -280,7 +307,6 @@ namespace Autonomy
         IMC::FollowReference man;
         man.control_ent = 255;
         man.control_src = m_args.follower_id;
-        man.altitude_interval = m_args.altitude_interval;
         man.timeout = m_args.connection_timeout + 10;
 
         IMC::PlanSpecification spec;
@@ -314,24 +340,20 @@ namespace Autonomy
       void
       sendReference()
       {
-        if (!m_started)
-          return;
+        float lat = m_ref_lat;
+        float lon = m_ref_lon;
+        getFollowerOffset(m_ref_heading, &lat, &lon);
 
-        if (!m_got_ref)
-          return;
+        // Point offset;
+        // toLocalCoordinates(m_ref_lat, m_ref_lon, &offset.x, &offset.y);
 
-        Point offset;
-        toLocalCoordinates(m_ref_lat, m_ref_lon, &offset.x, &offset.y);
+        // double bearing;
+        // double range;
+        // Coordinates::toPolar(m_formation_offset, &bearing, &range);
+        // bearing += m_ref_heading;
+        // Coordinates::displace(offset, bearing, range);
 
-        double bearing;
-        double range;
-        Coordinates::toPolar(m_formation_offset, &bearing, &range);
-        bearing += m_ref_heading;
-        Coordinates::displace(offset, bearing, range);
-
-        double lat;
-        double lon;
-        fromLocalCoordinates(offset.x, offset.y, &lat, &lon);
+        // fromLocalCoordinates(offset.x, offset.y, &lat, &lon);
 
         IMC::DesiredZ z;
         z.z_units = IMC::ZUnits::Z_DEPTH;
@@ -356,13 +378,28 @@ namespace Autonomy
       }
 
       void
+      getFollowerOffset(const float heading, float* lat, float* lon)
+      {
+        Point offset;
+        toLocalCoordinates(*lat, *lon, &offset.x, &offset.y);
+
+        double bearing;
+        double range;
+        Coordinates::toPolar(m_formation_offset, &bearing, &range);
+        bearing += heading;
+        Coordinates::displace(offset, bearing, range);
+
+        fromLocalCoordinates(offset.x, offset.y, lat, lon);
+      }
+
+      void
       toLocalCoordinates(double lat, double lon, float* x, float* y)
       {
         Coordinates::WGS84::displacement(m_estate.lat, m_estate.lon, 0, lat, lon, 0, x, y);
       }
 
       void
-      fromLocalCoordinates(double x, double y, double* lat, double* lon)
+      fromLocalCoordinates(double x, double y, float* lat, float* lon)
       {
         *lat = m_estate.lat;
         *lon = m_estate.lon;
@@ -378,6 +415,12 @@ namespace Autonomy
 
           if (m_ref_timer.overflow())
           {
+            if (!m_started)
+              continue;
+
+            if (!m_got_ref)
+              continue;
+
             sendReference();
             m_ref_timer.reset();
           }
