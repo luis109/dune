@@ -24,75 +24,74 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Luis Venâncio (from Consumer)                                    *
+// Author: Eduardo Marques                                                  *
 //***************************************************************************
 
-#ifndef DUNE_TASKS_FILTERED_CONSUMER_HPP_INCLUDED_
-#define DUNE_TASKS_FILTERED_CONSUMER_HPP_INCLUDED_
+// ISO C++ 98 headers.
+#include <iomanip>
 
 // DUNE headers.
-#include <DUNE/Tasks/AbstractConsumer.hpp>
+#include <DUNE/DUNE.hpp>
 
-#include <DUNE/Time/Clock.hpp>
-#include <DUNE/Streams/Terminal.hpp>
-#include <vector>
-#include <algorithm>
-
-namespace DUNE
+namespace Simulators
 {
-  namespace Tasks
+  namespace Receiver
   {
-    template <typename T, typename M>
-    class FilteredConsumer: public AbstractConsumer
+    using DUNE_NAMESPACES;
+    //! %Task arguments.
+    struct Arguments
     {
-    public:
-      typedef void (T::* Routine)(const M*);
-      typedef bool (T::* Filter)(const M*);
+    };
 
-      //! Constructor.
-      FilteredConsumer(T& o, Routine f, Filter filter):
-        m_obj(o),
-        m_fun(f),
-        m_filter(filter)
-      { }
+    //! %GPS simulator task.
+    struct Task: public Tasks::Task
+    {
+      IMC::Temperature m_temp;
+
+      Task(const std::string& name, Tasks::Context& ctx):
+        Tasks::Task(name, ctx)
+      {
+        // bind<IMC::Temperature>(this, &Task::validateTemperature);
+        bind<IMC::Temperature>(this);
+        // bind<IMC::Temperature>(this, &Task::consume, nullptr); //static_cast<bool (Task::*)(const IMC::Temperature*)>(nullptr)
+        bindUnfiltered<IMC::Temperature>(this);
+      }
+
+      bool
+      validateTemperature(const IMC::Temperature* msg)
+      {
+        return msg->getSource() == getSystemId();
+      }
 
       void
-      consume(const IMC::Message* msg)
+      onUpdateParameters(void)
       {
-        double now = Time::Clock::getNsec();
-        const M* m = reinterpret_cast<const M*>(msg);
-        if ( !((m_obj).*(m_filter))(m) )
-          return;
-        ((m_obj).*(m_fun))(m);
-
-        if (msg->getId() != 263)
-          return;
-        m_times.push_back((Time::Clock::getNsec() - now) / 1e6);
+        
       }
 
-      ~FilteredConsumer(void)
+      void
+      onResourceInitialization(void)
       {
-        if (m_times.size() == 0)
-          return;
-        double sum = 0;
-        std::for_each(m_times.begin(), m_times.end(), [&] (double n) {
-          sum += n;
-        });
-        std::stringstream ss;
-        ss << "Message consumed in "
-           << sum / m_times.size()
-           << " ms | Sample size: "
-           << m_times.size();
-        DUNE_WRN("Filtered Consume", ss.str().c_str());
       }
 
-    private:
-      T& m_obj;
-      Routine m_fun;
-      Filter m_filter;
-      std::vector<double> m_times;
+      void
+      consume(const IMC::Temperature* msg)
+      {
+        msg->getSourceEntity();
+        std::string str = resolveEntity(msg->getSourceEntity());
+        war("Received from: %s", str.c_str());
+      }
+
+      void
+      onMain(void)
+      {
+        while(!stopping())
+        {
+          waitForMessages(1.0);
+        }
+      }
     };
   }
 }
 
-#endif
+DUNE_TASK

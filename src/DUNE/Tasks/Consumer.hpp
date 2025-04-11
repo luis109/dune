@@ -33,6 +33,11 @@
 // DUNE headers.
 #include <DUNE/Tasks/AbstractConsumer.hpp>
 
+#include <DUNE/Time/Clock.hpp>
+#include <DUNE/Streams/Terminal.hpp>
+#include <vector>
+#include <algorithm>
+
 namespace DUNE
 {
   namespace Tasks
@@ -52,15 +57,35 @@ namespace DUNE
       void
       consume(const IMC::Message* msg)
       {
+        double now = Time::Clock::getNsec();
         ((m_obj).*(m_fun))(reinterpret_cast<const M*>(msg));
+
+        if (msg->getId() != 263)
+          return;
+        m_times.push_back((Time::Clock::getNsec() - now) / 1e6);
       }
 
       ~Consumer(void)
-      { }
+      {
+        if (m_times.size() == 0)
+          return;
+
+        double sum = 0;
+        std::for_each(m_times.begin(), m_times.end(), [&] (double n) {
+          sum += n;
+        });
+        std::stringstream ss;
+        ss << "Message consumed in "
+           << sum / m_times.size()
+           << " ms | Sample size: "
+           << m_times.size();
+        DUNE_WRN("Consume", ss.str().c_str());
+      }
 
     private:
       T& m_obj;
       Routine m_fun;
+      std::vector<double> m_times;
     };
   }
 }
