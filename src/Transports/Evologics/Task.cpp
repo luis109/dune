@@ -540,6 +540,10 @@ namespace Transports
           handleUsblPosition(msg->value);
         else if (String::startsWith(msg->value, "USBLANGLES"))
           handleUsblAngles(msg->value);
+
+        // Janus.
+        else if (String::startsWith(msg->value, "RECVJRB"))
+          handleJanusBaseline(msg->value);
       }
 
       void
@@ -793,6 +797,27 @@ namespace Transports
         reply.fill(ua);
 
         dispatch(ua);
+      }
+
+      void
+      handleJanusBaseline(const std::string& str)
+      {
+        int offset = 0;
+        long unsigned int data_size = 0;
+        int rv = 0;
+
+        rv = std::sscanf(str.c_str(),
+                         "RECVJRB,%lu,%n",
+                         &data_size, &offset);
+
+        if (rv != 2)
+          throw std::runtime_error("invalid format for RECVJRB");
+        
+        IMC::UamRxFrame msg;
+        msg.flags |= IMC::UamRxFrame::URF_JANUS_BASELINE;
+        msg.data.assign((char*)&str[offset], (char*)&str[str.size() - 1]);
+        
+        dispatch(msg);
       }
 
       void

@@ -73,6 +73,7 @@ namespace Transports
       "RECVSTART",
       "RECVFAILED",
       "RECVEND",
+      "RECVJRB",
       "SENDSTART",
       "SENDEND",
       "SENDPBM",
