@@ -74,6 +74,7 @@ namespace Transports
       "RECVFAILED",
       "RECVEND",
       "RECVJRB",
+      "RECVJRP",
       "SENDSTART",
       "SENDEND",
       "SENDPBM",
@@ -281,6 +282,16 @@ namespace Transports
         sendAT(cmd);
         expectOK();
         setBusy(true);
+      }
+
+      // Janus get cargo.
+      //! @param[in] cargo_size size of the cargo.
+      void
+      getJanusCargo(size_t cargo_size)
+      {
+        std::string cmd = String::str("@JRLP%u", cargo_size);
+        sendAT(cmd);
+        expectOK();
       }
 
       //! Retrieve the last computed acoustic signal propagation time
