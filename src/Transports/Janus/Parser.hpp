@@ -59,6 +59,9 @@ namespace Transports
       void
       deserializeBaseline(const std::vector<char>& data, IMC::UamJanusPacket& packet)
       {
+        
+        m_task->spew("Received Janus baseline packet: %s", String::bytesToHex(data).c_str());
+
         // Check message size
         if (data.size() < c_baseline_size)
           throw std::runtime_error(String::str("invalid baseline packet size: %zu", data.size()));
@@ -67,7 +70,7 @@ namespace Transports
         Algorithms::CRC8 crc(c_poly);
         crc.putArray((uint8_t*)&msg->data[0], c_baseline_size - 1);
         if (crc.get() != (uint8_t)(msg->data[c_baseline_size - 1]))
-          throw std::runtime_error(String::str("invalid baseline packet CRC: %02x != %02x", msg->data[c_baseline_size - 1], crc.get()));
+          throw std::runtime_error(String::str("invalid baseline packet CRC: %02x != %02x", (uint8_t)msg->data[c_baseline_size - 1], crc.get()));
 
         // Deserialize the baseline packet.
         RecvJanusBaseline baseline;
@@ -83,7 +86,10 @@ namespace Transports
           baseline.adb[i]            = data[2+i];
         baseline.crc                 = data[7];
 
-        m_task->spew("Received Janus baseline packet: version=%d, mobility=%d, schedule=%d, tx_rx=%d, forward=%d, user_class_id=%d, application_type=%d, adb=[%02x %02x %02x %02x %02x], crc=%02x",
+        m_task->spew("Deserialized Janus baseline packet: version=%d, mobility=%d, "
+                     "schedule=%d, tx_rx=%d, forward=%d, user_class_id=%d, "
+                     "application_type=%d, adb=[%02x %02x %02x %02x %02x], "
+                     "crc=%02x",
             baseline.version,
             baseline.mobility,
             baseline.schedule,
@@ -112,7 +118,7 @@ namespace Transports
           if (schedule & 0b10000000)
           {
             packet.baseline_flags |= IMC::UamJanusPacket::JANUSBL_REPEAT_INTERVAL;
-            // Compute intervale
+            // Compute repeat interval
             packet.time = trptIndexToMs(schedule & 0b01111111);
           }
           else
@@ -122,19 +128,19 @@ namespace Transports
             packet.time = trsvIndexToMs(schedule & 0b01111111);
           }
         }
-          packet.baseline_flags |= baseline.tx_rx ? IMC::UamJanusPacket::JANUSBL_DECODE_CAPABILITY : 0;
-          packet.baseline_flags |= baseline.forward ? IMC::UamJanusPacket::JANUSBL_FORWARD_CAPABILITY : 0;
-          packet.class_user_id = baseline.user_class_id;
-          packet.application_type = baseline.application_type;
-          packet.adb.assign((char*)&baseline.adb[0], (char*)&baseline.adb[4]);
-          // packet.error.clear();
+        packet.baseline_flags |= baseline.tx_rx ? IMC::UamJanusPacket::JANUSBL_DECODE_CAPABILITY : 0;
+        packet.baseline_flags |= baseline.forward ? IMC::UamJanusPacket::JANUSBL_FORWARD_CAPABILITY : 0;
+        packet.class_user_id = baseline.user_class_id;
+        packet.application_type = baseline.application_type;
+        packet.adb.assign((char*)&baseline.adb[0], (char*)&baseline.adb[4]);
+        // packet.error.clear();
       }
 
       // Serialize the baseline packet.
       void
       serializeBaseline(const IMC::UamJanusPacket& packet, std::vector<char>& data)
       {
-        data.resize(8);
+        data.resize(c_baseline_size);
 
         // Version
         data[0] |= m_version << 4;
