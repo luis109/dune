@@ -45,8 +45,9 @@ namespace Transports
     class Parser 
     {
     public:
-      Parser(Tasks::Task* task):
-        m_task(task)
+      Parser(Tasks::Task* task, uint8_t version = 0x03):
+        m_task(task),
+        m_version(version)
       {
         computeTRSVTable();
         computeTRPTTable();
@@ -58,6 +59,17 @@ namespace Transports
       void
       deserializeBaseline(const std::vector<char>& data, IMC::UamJanusPacket& packet)
       {
+        // Check message size
+        if (data.size() < c_baseline_size)
+          throw std::runtime_error(String::str("invalid baseline packet size: %zu", data.size()));
+
+        // Check CRC
+        Algorithms::CRC8 crc(c_poly);
+        crc.putArray((uint8_t*)&msg->data[0], c_baseline_size - 1);
+        if (crc.get() != (uint8_t)(msg->data[c_baseline_size - 1]))
+          throw std::runtime_error(String::str("invalid baseline packet CRC: %02x != %02x", msg->data[c_baseline_size - 1], crc.get()));
+
+        // Deserialize the baseline packet.
         RecvJanusBaseline baseline;
         baseline.version             = data[0] >> 4;
         baseline.mobility            = (data[0] & 0b00001000) >> 3;
@@ -118,8 +130,43 @@ namespace Transports
           // packet.error.clear();
       }
 
+      // Serialize the baseline packet.
+      void
+      serializeBaseline(const IMC::UamJanusPacket& packet, std::vector<char>& data)
+      {
+        data.resize(8);
 
-      // Convert index of reserve time to milliseconds.
+        // Version
+        data[0] |= m_version << 4;
+        // Mobility
+        data[0] |= packet.baseline_flags & IMC::UamJanusPacket::JANUSBL_MOBILE ? 0b00001000 : 0;
+        // Schedule
+        if ((packet.baseline_flags & IMC::UamJanusPacket::JANUSBL_REPEAT_INTERVAL) ||
+            (packet.baseline_flags & IMC::UamJanusPacket::JANUSBL_RESERVATION_TIME))
+          data[0] |= 0b00000100;
+        // Tx/Rx
+        data[0] |= packet.baseline_flags & IMC::UamJanusPacket::JANUSBL_DECODE_CAPABILITY ? 0b00000010 : 0;
+        // Forward
+        data[0] |= packet.baseline_flags & IMC::UamJanusPacket::JANUSBL_FORWARD_CAPABILITY ? 0b00000001 : 0;
+
+        // User Class Id
+        data[1] = packet.class_user_id;
+
+        // Application Type
+        data[2] = (packet.application_type << 2);
+        // ADB
+        data[2] |= (packet.adb[0] & 0b00000011);
+        for (uint8_t i = 1; i < 5; ++i)
+          data[2+i] = packet.adb[i];
+
+        // CRC
+        Algorithms::CRC8 crc(c_poly);
+        crc.putArray((uint8_t*)&data[0], 7);
+        data[7] = crc.get();
+      }
+
+
+      //! Convert index of reserve time to milliseconds.
       //! @param[in] i index.
       //! @return time in milliseconds.
       double 
@@ -130,7 +177,7 @@ namespace Transports
         return m_trsv_table[i];
       }
 
-      // Convert index of repeat interval to milliseconds.
+      //! Convert index of repeat interval to milliseconds.
       //! @param[in] i index.
       //! @return time in seconds.
       double 
@@ -142,13 +189,25 @@ namespace Transports
       }
       
     private:
+      //! Polynomial used for CRC8.
+      const uint8_t c_poly = 0x07;
+      //! Baseline size
+      const uint8_t c_baseline_size = 8;
+      //! Protocol version.
+      uint8_t m_version;
+
+      //! Maximum index for TRSV and TRPT tables.
       const uint8_t c_max_index = 127;
+      //! Transmission rate for TRSV table (reservation time).
       const double c_trsv_rate = 1.1;
+      //! Transmission rate for TRPT table (repeat interval).
       const double c_trpt_rate = 1.176769793407883;
-  
+      //! Transmission rate table for TRSV (reservation time).
       std::vector<double> m_trsv_table;
+      //! Transmission rate table for TRPT (repeat interval).
       std::vector<double> m_trpt_table;
 
+      //! Owener task.
       Tasks::Task* m_task;
 
       //! Structure to hold Janus baseline packet received.
@@ -178,6 +237,7 @@ namespace Transports
         uint8_t crc;                // 8 bits
       };
 
+      //! Compute TRSV and TRPT tables.
       void 
       computeTRSVTable()
       {

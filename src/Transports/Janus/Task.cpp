@@ -39,11 +39,6 @@ namespace Transports
   {
     using DUNE_NAMESPACES;
 
-    // CRC8 polynomial.
-    static constexpr uint8_t c_poly = 0x07;
-    // Size of baseline packet.
-    static constexpr uint8_t c_baseline_size = 8;
-
     struct Arguments
     {
       
@@ -123,43 +118,6 @@ namespace Transports
       void
       consume(const IMC::UamRxFrame* msg)
       {
-        if (msg->data.size() < c_baseline_size)
-        {
-          debug("invalid message size");
-          return;
-        }
-
-        // Check system source and destination.
-        // uint16_t imc_addr_src = 0;
-        // try
-        // {
-        //   imc_addr_src = resolveSystemName(msg->sys_src);
-        // }
-        // catch (...)
-        // {
-        //   debug("unknown system name: %s", msg->sys_src.c_str());
-        //   return;
-        // }
-
-        // uint16_t imc_addr_dst = 0;
-        // try
-        // {
-        //   imc_addr_dst = resolveSystemName(msg->sys_dst);
-        // }
-        // catch (...)
-        // {
-        //   debug("unknown system name: %s", msg->sys_dst.c_str());
-        //   return;
-        // }
-
-        Algorithms::CRC8 crc(c_poly);
-        crc.putArray((uint8_t*)&msg->data[0], c_baseline_size - 1);
-        if (crc.get() != (uint8_t)(msg->data[c_baseline_size - 1]))
-        {
-          debug("invalid CRC");
-          return;
-        }
-
         // Deserialize the baseline packet.
         if (msg->flags == IMC::UamRxFrame::URF_JANUS_BASELINE)
         {
