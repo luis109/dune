@@ -269,6 +269,20 @@ namespace Transports
         expectOK();
       }
 
+      //! Janus packet send.
+      //! @param[in] data data to send.
+      //! @param[in] data_size number of bytes to send.
+      void
+      sendJRP(const uint8_t* data, size_t data_size)
+      {
+        // Do not set modem busy.
+        std::string cmd = String::str("*SENDJRP,%u,", data_size);
+        cmd.append((char*)data, data_size);
+        sendAT(cmd);
+        expectOK();
+        setBusy(true);
+      }
+
       //! Retrieve the last computed acoustic signal propagation time
       //! between communicating devices.
       //! @return propagation time (microsecond).

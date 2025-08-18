@@ -31,7 +31,7 @@
 #include <DUNE/DUNE.hpp>
 
 // Local headers.
-#include "TimeResolutionScale.hpp"
+#include "Parser.hpp"
 
 namespace Transports
 {
@@ -49,33 +49,6 @@ namespace Transports
       
     };
 
-    //! Structure to hold Janus baseline packet received.
-    struct RecvJanusBaseline 
-    {
-      RecvJanusBaseline(void):
-        version(0),
-        mobility(false),
-        schedule(false),
-        tx_rx(false),
-        forward(false),
-        user_class_id(0),
-        application_type(0),
-        crc(0)
-      {
-        memset(adb, 0, sizeof(adb));
-      }
-
-      uint8_t version;            // 4 bits
-      bool mobility;              // 1 bit
-      bool schedule;              // 1 bit
-      bool tx_rx;                 // 1 bit
-      bool forward;               // 1 bit
-      uint8_t user_class_id;      // 8 bits
-      uint8_t application_type;   // 6 bits (Ignore first 2 bits)
-      uint8_t adb[5];             // 34 bits (Ignore first 6 bits)
-      uint8_t crc;                // 8 bits
-    };
-
     struct Task: public DUNE::Tasks::Task
     {
       //! Sequence number. Starts at 0x7FFF, 
@@ -88,7 +61,7 @@ namespace Transports
       //! When "false" processQueue must wait
       bool m_can_send;
       //! Time scale convertion for reserve time and repeat interval.
-      TimeResolutionScale m_scale_conversion;
+      Parser m_parser;
       //! Task arguments.
       Arguments m_args;
 
@@ -98,7 +71,8 @@ namespace Transports
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_reqid(0x7FFF),
-        m_can_send(true)
+        m_can_send(true),
+        m_parser(this)
       {
         // Bind messages.
         bind<IMC::UamJanusPacket>(this);
@@ -189,67 +163,9 @@ namespace Transports
         // Deserialize the baseline packet.
         if (msg->flags == IMC::UamRxFrame::URF_JANUS_BASELINE)
         {
-          RecvJanusBaseline baseline;
-          baseline.version             = msg->data[0] >> 4;
-          baseline.mobility            = (msg->data[0] & 0b00001000) >> 3;
-          baseline.schedule            = (msg->data[0] & 0b00000100) >> 2;
-          baseline.tx_rx               = (msg->data[0] & 0b00000010) >> 1;
-          baseline.forward             = msg->data[0] & 0b00000001;
-          baseline.user_class_id       = msg->data[1];
-          baseline.application_type    = msg->data[2] >> 2;
-          baseline.adb[0]              = msg->data[2] & 0b00000011;
-          for (uint8_t i = 1; i < 5; ++i)
-            baseline.adb[i]            = msg->data[2+i];
-          baseline.crc                 = msg->data[7];
-
-          spew("Received Janus baseline packet: version=%d, mobility=%d, schedule=%d, tx_rx=%d, forward=%d, user_class_id=%d, application_type=%d, adb=[%02x %02x %02x %02x %02x], crc=%02x",
-              baseline.version,
-              baseline.mobility,
-              baseline.schedule,
-              baseline.tx_rx,
-              baseline.forward,
-              baseline.user_class_id,
-              baseline.application_type,
-              baseline.adb[0],
-              baseline.adb[1],
-              baseline.adb[2],
-              baseline.adb[3],
-              baseline.adb[4],
-              baseline.crc);
-
-          IMC::UamJanusPacket packet;
-          // packet.seq = msg->seq;
-          packet.op = IMC::UamJanusPacket::OP_BASELINE_RECV;
-          packet.baseline_flags |= baseline.mobility ? IMC::UamJanusPacket::JANUSBL_MOBILE : 0;
-        // Use schedule
-        if (baseline.schedule)
-        {
-          // Check first 8 bits of ADB (Ignore first 6 bits of array).
-          uint8_t schedule = (baseline.adb[0] & 0b00000011) << 6;
-          schedule |= (baseline.adb[1] >> 2);
-
-          if (schedule & 0b10000000)
-          {
-            packet.baseline_flags |= IMC::UamJanusPacket::JANUSBL_REPEAT_INTERVAL;
-            // Compute intervale
-            packet.time = m_scale_conversion.trptIndexToMs(schedule & 0b01111111);
-          }
-          else
-          {
-            packet.baseline_flags |= IMC::UamJanusPacket::JANUSBL_RESERVATION_TIME;
-            // Compute reservation time
-            packet.time = m_scale_conversion.trsvIndexToMs(schedule & 0b01111111);
-          }
-        }
-          packet.baseline_flags |= baseline.tx_rx ? IMC::UamJanusPacket::JANUSBL_DECODE_CAPABILITY : 0;
-          packet.baseline_flags |= baseline.forward ? IMC::UamJanusPacket::JANUSBL_FORWARD_CAPABILITY : 0;
-          // packet.time = ??????? // Is this the reservation time/repeat interval?
-          packet.class_user_id = baseline.user_class_id;
-          packet.application_type = baseline.application_type;
-          packet.adb.assign((char*)&baseline.adb[0], (char*)&baseline.adb[4]);
-          // packet.error.clear();
-
-          dispatch(packet);
+          IMC::UamJanusPacket baseline;
+          m_parser.deserializeBaseline(msg->data, baseline);
+          dispatch(baseline);
         }
         else if (msg->flags == IMC::UamRxFrame::URF_JANUS_CARGO)
         {

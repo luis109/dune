@@ -593,6 +593,7 @@ namespace Transports
         ticket.seq = msg->seq;
         ticket.ack = (msg->flags & IMC::UamTxFrame::UTF_ACK) != 0;
         ticket.pbm = (msg->flags & IMC::UamTxFrame::UTF_DELAYED) != 0;
+        ticket.janus_send = (msg->flags & IMC::UamTxFrame::UTF_JANUS_SEND) != 0;
 
         if (msg->sys_dst == getSystemName())
         {
@@ -618,6 +619,14 @@ namespace Transports
           return;
         }
 
+        if (msg->flags & IMC::UamTxFrame::UTF_JANUS_GET_CARGO)
+        {
+          // Get cargo.
+          
+          m_kalive_counter.reset();
+          return;
+        }
+
         try
         {
           transmitData((const uint8_t*)&msg->data[0], msg->data.size(), ticket);
@@ -638,6 +647,12 @@ namespace Transports
       void
       transmitData(const uint8_t* data, unsigned data_size, Ticket& ticket)
       {
+        if (ticket.janus_send)
+        {
+          // Send janus packet.
+          return;
+        }
+
         if (ticket.pbm)
         {
           m_driver->sendPBM(data, data_size, ticket.addr);
