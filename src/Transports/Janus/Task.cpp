@@ -111,8 +111,7 @@ namespace Transports
         if (msg->op != IMC::UamJanusPacket::OP_SEND_REQ)
           return;
 
-        // Send here
-        
+        addToQueue(msg->clone());
       }
 
       void
@@ -122,7 +121,18 @@ namespace Transports
         if (msg->flags == IMC::UamRxFrame::URF_JANUS_BASELINE)
         {
           IMC::UamJanusPacket baseline;
-          m_parser.deserializeBaseline(msg->data, baseline);
+
+          try
+          {
+            m_parser.deserializeBaseline(msg->data, baseline);
+          }
+          catch(const std::exception& e)
+          {
+            baseline.clear();
+            baseline.op = IMC::UamJanusPacket::OP_BASELINE_RECV;
+            baseline.error = e.what();
+          }
+          
           dispatch(baseline);
         }
         else if (msg->flags == IMC::UamRxFrame::URF_JANUS_CARGO)
@@ -146,7 +156,7 @@ namespace Transports
         }
         uint16_t idOfMsg = msg->seq;
 
-        const IMC::UamJanusPacket* request = m_transmission_requests[idOfMsg];
+        // const IMC::UamJanusPacket* request = m_transmission_requests[idOfMsg];
 
         switch (msg->value) {
           case IMC::UamTxStatus::UTS_BUSY:
@@ -212,175 +222,17 @@ namespace Transports
       }
 
       void
-      sendFrame(const std::string& sys, const uint16_t id, const std::vector<uint8_t>& data, bool ack)
-      {
-        Algorithms::CRC8 crc(c_poly);
-
-        IMC::UamTxFrame frame;
-        frame.setSource(getSystemId());
-        frame.setSourceEntity(getEntityId());
-        frame.setDestination(getSystemId());
-        frame.sys_dst = sys;
-        frame.seq = id;
-        frame.flags = ack ? IMC::UamTxFrame::UTF_ACK : 0;
-
-        frame.data.push_back(c_sync);
-        crc.putByte(c_sync);
-        for (size_t i = 0; i < data.size(); ++i)
-        {
-          frame.data.push_back(data[i]);
-          crc.putByte(data[i]);
-        }
-        frame.data.push_back(crc.get());
-
-        dispatch(frame);
-      }
-
-      void
-      sendFrameRaw(const std::string& sys, const uint16_t id, const std::vector<uint8_t>& data, bool ack)
+      sendFrame(const uint16_t id, const UamJanusPacket& packet)
       {
         IMC::UamTxFrame frame;
         frame.setSource(getSystemId());
         frame.setSourceEntity(getEntityId());
         frame.setDestination(getSystemId());
-        frame.sys_dst = sys;
+        frame.flags = IMC::UamTxFrame::UTF_JANUS_SEND;
         frame.seq = id;
-        frame.flags = ack ? IMC::UamTxFrame::UTF_ACK : 0;
-
-        for (size_t i = 0; i < data.size(); ++i)
-        {
-          frame.data.push_back(data[i]);
-        }
+        m_parser.serializeBaseline(packet, frame.data);
 
         dispatch(frame);
-      }
-
-      void
-      sendMessage(const std::string& sys, const uint16_t id, const InlineMessage<IMC::Message>& imsg)
-      {
-        const IMC::Message* msg = NULL;
-
-        try
-        {
-          msg = imsg.get();
-        }
-        catch (...)
-        {
-          return;
-        }
-
-        // Check if special command can be used...
-        if (msg->getId() == IMC::PlanControl::getIdStatic())
-        {
-          const IMC::PlanControl * pc = static_cast<const IMC::PlanControl*>(msg);
-          if (pc->arg.isNull())
-          {
-            sendPlanControl(sys, id, static_cast<const IMC::PlanControl*>(msg));
-            return;
-          }
-        }
-
-        // For all other cases, send the raw message across
-        sendRawMessage(sys, id, msg);
-      }
-
-      void
-      sendRawMessage(const std::string& sys, const uint16_t id, const IMC::Message * msg)
-      {
-        std::vector<uint8_t> data;
-        data.push_back(CODE_RAW);
-
-        inf("Send message of type %s, with serialization size %d.", msg->getName(), msg->getSerializationSize());
-
-        // leave 1 byte for CODE_RAW and another for CRC8
-        uint8_t buf[2500];
-
-        // start with message id
-        uint16_t id2 = msg->getId();
-        std::memcpy(&buf[0], &id2, sizeof(uint16_t));
-
-        // followed by all message fields
-        msg->serializeFields(&buf[2]);
-
-        int length = msg->getSerializationSize() + 2;
-        data.insert(data.end(), buf, buf + length);
-        sendFrame(sys, id, data, true);
-      }
-
-      void
-      sendRaw(const IMC::AcousticRequest& req, const std::string& sys, const uint16_t id, const InlineMessage<IMC::Message>& imsg)
-      {
-        const IMC::Message* msg = NULL;
-
-        try
-        {
-          msg = imsg.get();
-        }
-        catch (...)
-        {
-          sendAcousticStatus(&req, IMC::AcousticStatus::STATUS_INPUT_FAILURE, "Null pointer.");
-          removeFromQueue(req.req_id);
-          return;
-        }
-
-        // Check if is DevDataBinary...
-        if (msg->getId() == IMC::DevDataBinary::getIdStatic())
-        {
-          const IMC::DevDataBinary * ddb = static_cast<const IMC::DevDataBinary*>(msg);
-          if (ddb->value.size() > 0)
-          {
-            std::vector<uint8_t> data;
-            // no coding, send as is
-            for (size_t i = 0; i < ddb->value.size(); ++i)
-            {
-              data.push_back(ddb->value[i]);
-            }
-
-            sendFrameRaw(sys, id, data, true);
-            return;
-          }
-        }
-
-        sendAcousticStatus(&req, IMC::AcousticStatus::STATUS_UNSUPPORTED, "Unsupported type for raw send.");
-        removeFromQueue(req.req_id);
-      }
-
-      void
-      recvMessage(uint16_t imc_src, uint16_t imc_dst, const IMC::UamRxFrame* msg)
-      {
-        // debug("Parsing message received via acoustic message.");
-
-        // try
-        // {
-        //   uint16_t msg_type;
-        //   std::memcpy(&msg_type, &msg->data[2], sizeof(uint16_t));
-        //   Message *m = IMC::Factory::produce(msg_type);
-        //   if (m == NULL)
-        //   {
-        //     err("Invalid message type received: %d", msg_type);
-        //     return;
-        //   }
-
-        //   m->setSource(imc_src);
-        //   m->setDestination(imc_dst);
-        //   m->setTimeStamp(msg->getTimeStamp());
-        //   m->deserializeFields((const unsigned char *)&msg->data[4], msg->data.size()-4);
-
-        //   // mark the message's origin as acoustic if it is an acoustic command
-        //   if (m->getId() == IMC::TextMessage::getIdStatic())
-        //   {
-        // 	IMC::TextMessage* txtmsg = static_cast<IMC::TextMessage*>(m);
-        // 	std::stringstream ss;
-        // 	ss << "acoustic/" << msg->sys_src;
-        // 	txtmsg->origin = ss.str();
-        //   }
-
-        //   dispatch(m, DF_KEEP_TIME | DF_LOOP_BACK);
-        //   debug("Acoustic message successfully parsed as '%s'.", m->getName());
-        // }
-        // catch (std::exception& ex) {
-        //   err("Error parsing raw message from UAM frame: %s.", ex.what());
-        // }
       }
 
       void
@@ -416,6 +268,7 @@ namespace Transports
           uint16_t id = m_transmission_requests.begin()->first;
 
           // Serialize Janus packet and send it.
+          sendFrame(id, *req);
         }
       }
 
