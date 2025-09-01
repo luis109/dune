@@ -46,8 +46,8 @@ namespace Transports
     {
     public:
       Parser(Tasks::Task* task, uint8_t version = 0x03):
-        m_task(task),
-        m_version(version)
+        m_version(version),
+        m_task(task)
       {
         computeTRSVTable();
         computeTRPTTable();
@@ -60,7 +60,7 @@ namespace Transports
       deserializeBaseline(const std::vector<char>& data, IMC::UamJanusPacket& packet)
       {
         
-        m_task->spew("Received Janus baseline packet: %s", String::bytesToHex(data).c_str());
+        m_task->spew("Received Janus baseline packet: %s", String::toHex(data).c_str());
 
         // Check message size
         if (data.size() < c_baseline_size)
@@ -68,9 +68,9 @@ namespace Transports
 
         // Check CRC
         Algorithms::CRC8 crc(c_poly);
-        crc.putArray((uint8_t*)&msg->data[0], c_baseline_size - 1);
-        if (crc.get() != (uint8_t)(msg->data[c_baseline_size - 1]))
-          throw std::runtime_error(String::str("invalid baseline packet CRC: %02x != %02x", (uint8_t)msg->data[c_baseline_size - 1], crc.get()));
+        crc.putArray((uint8_t*)&data[0], c_baseline_size - 1);
+        if (crc.get() != (uint8_t)(data[c_baseline_size - 1]))
+          throw std::runtime_error(String::str("invalid baseline packet CRC: %02x != %02x", (uint8_t)data[c_baseline_size - 1], crc.get()));
 
         // Deserialize the baseline packet.
         RecvJanusBaseline baseline;
