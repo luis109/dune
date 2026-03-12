@@ -34,6 +34,9 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#if defined(DUNE_USING_DCCL)
+#include <DUNE/Encoders/DCCL/CodecDCCL.hpp>
+#endif
 
 // Local headers.
 #include "Router.hpp"
@@ -83,6 +86,10 @@ namespace Transports
       std::list<IMC::TransmissionRequest*> m_retransmission_list;
       int m_plan_chksum;
       Router m_router;
+#if defined(DUNE_USING_DCCL)
+      dccl::Codec m_dccl;
+      DUNE::Encoders::DCCL::CodecDCCL m_codec_dccl;
+#endif
 
       std::map<uint16_t, IMC::AcousticOperation*> m_acoustic_requests;
 
@@ -95,6 +102,9 @@ namespace Transports
         m_vmedium(NULL),
         m_plan_chksum(0),
         m_router(this)
+#if defined(DUNE_USING_DCCL)
+      , m_codec_dccl(m_dccl)
+#endif
       {
         param("Iridium - Entity Label", m_args.iridium_label)
             .defaultValue("GSM")
@@ -794,6 +804,52 @@ namespace Transports
         //add to transmission_queue
         m_acoustic_requests[newId] = msg->clone();
         dispatch(tx);
+      }
+
+      bool
+      needsCompression(const IMC::TransmissionRequest* msg)
+      {
+        if (msg->data_mode != IMC::TransmissionRequest::DMODE_INLINEMSG_DCCL)
+          return false;
+
+        if (msg->comm_mean != IMC::TransmissionRequest::CMEAN_SATELLITE && 
+            msg->comm_mean != IMC::TransmissionRequest::CMEAN_ACOUSTIC)
+          return false;
+        
+        const IMC::Message* inlinemsg = msg->msg_data.get();
+        if (inlinemsg == NULL)
+          return false;
+
+        switch (inlinemsg->getId())
+        {
+          case (DUNE_IMC_ESTIMATEDSTATE):
+          case (DUNE_IMC_PLANSPECIFICATION):
+          case (DUNE_IMC_PLANDB):
+              return true;
+          default:
+            return false;
+        }
+      }
+
+      IMC::TransmissionRequest
+      compressMessage(const IMC::TransmissionRequest* msg)
+      {
+        if (!needsCompression(msg))
+          return *msg;
+
+        // Get message content
+        IMC::TransmissionRequest req = *msg;
+        IMC::Message* inlinemsg = req.msg_data.get();
+        
+        // Encode message using DCCL
+        std::string encoded_string = m_codec_dcll.encodeDCCL(msg);
+        encoded_string = Utils::String::toHex(encoded_string);
+        req.raw_data.assign(encoded_string.begin(), encoded_string.end());
+
+        // Remove original message content
+        req.msg_data.clear();
+
+        return req;
       }
 
       IMC::StateReport*

@@ -869,10 +869,10 @@ namespace Transports
           // mark the message's origin as acoustic if it is an acoustic command
           if (m->getId() == IMC::TextMessage::getIdStatic())
           {
-        	IMC::TextMessage* txtmsg = static_cast<IMC::TextMessage*>(m);
-        	std::stringstream ss;
-        	ss << "acoustic/" << msg->sys_src;
-        	txtmsg->origin = ss.str();
+            IMC::TextMessage* txtmsg = static_cast<IMC::TextMessage*>(m);
+            std::stringstream ss;
+            ss << "acoustic/" << msg->sys_src;
+            txtmsg->origin = ss.str();
           }
 
           dispatch(m, DF_KEEP_TIME | DF_LOOP_BACK);
