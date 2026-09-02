@@ -1,0 +1,21 @@
+.git
+.github
+.agents
+.codex
+
+# Local/proprietary extensions can contain credentials and deployment data.
+# They remain available to the bind-mounted development service, but must not
+# be copied into the distributable runtime image.
+private*
+user*
+
+build
+build-*
+cmake-build-*
+
+db
+log
+
+*.bak
+*.swp
+*~

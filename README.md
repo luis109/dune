@@ -5,3 +5,9 @@ DUNE: Unified Navigation Environment is a runtime environment for unmanned syste
 
 [![Build Status](https://travis-ci.org/LSTS/dune.svg?branch=master)](https://travis-ci.org/LSTS/dune)
 [![Build status](https://ci.appveyor.com/api/projects/status/tdcdgyf408u4y0ng?svg=true)](https://ci.appveyor.com/project/zepinto/dune) 
+
+Docker
+------
+
+See [docker/README.md](docker/README.md) for the containerized development,
+test, and LAUV simulator workflows.
