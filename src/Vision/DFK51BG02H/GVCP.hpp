@@ -489,7 +489,7 @@ namespace Vision
       {
         m_socket.write(data, size, m_cam_addr, c_port);
 
-#if defined(DEBUG)
+#if defined(DUNE_DEBUG)
         std::fprintf(stderr, "write (%u): ", size);
         for (unsigned i = 0; i < size; ++i)
           std::fprintf(stderr, "%02X ", data[i]);
@@ -505,7 +505,7 @@ namespace Vision
 
         int rv = m_socket.read(bfr, bfr_size);
 
-#if defined(DEBUG)
+#if defined(DUNE_DEBUG)
         std::fprintf(stderr, "read (%d): ", rv);
         for (int i = 0; i < rv; ++i)
           std::fprintf(stderr, "%02X ", (uint8_t)bfr[i]);
