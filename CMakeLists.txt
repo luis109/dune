@@ -104,7 +104,6 @@ message(STATUS "***          Optional Features         ***")
 message(STATUS "******************************************")
 dune_option(PICCOLO "Include Piccolo library")
 dune_option(SHARED "Build shared library and shared plugins")
-dune_option(DEBUG "Compile with debug information enabled")
 dune_option(PROFILE "Compile with profiling and debug information enabled")
 dune_option(TLSF "Include the TLSF O(1) memory allocator")
 dune_option(QT5 "Include Qt5 based GUI")
@@ -125,18 +124,15 @@ dune_option(DUNELEGACY "Disable compilation of C++17 features")
 include(${PROJECT_SOURCE_DIR}/cmake/I18N.cmake)
 
 #############################################################################
-# DUNE's default build type
+# DUNE's default build type and configuration-specific definitions
 #############################################################################
-if(DEBUG)
-  set(CMAKE_BUILD_TYPE "Debug")
-  add_definitions(-DDEBUG)
-else(DEBUG)
-  set(CMAKE_BUILD_TYPE "Release")
-endif(DEBUG)
-
 if(PROFILE)
   set(CMAKE_BUILD_TYPE "Debug")
+elseif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif(PROFILE)
+
+add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
 # Set a build name with more details than the default.
 set(BUILDNAME "${DUNE_SYSTEM_NAME_VAR}")
