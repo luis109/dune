@@ -132,7 +132,7 @@ elseif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif(PROFILE)
 
-add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
+add_compile_definitions($<$<CONFIG:Debug>:DUNE_DEBUG>)
 
 # Set a build name with more details than the default.
 set(BUILDNAME "${DUNE_SYSTEM_NAME_VAR}")
