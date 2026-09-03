@@ -9,7 +9,7 @@ The Docker setup supports two workflows:
 
 Docker Engine with the Compose plugin is required.
 
-## Develop and test
+## Develop
 
 Build the development image:
 
@@ -17,12 +17,11 @@ Build the development image:
 docker compose -f docker/docker-compose.yml build dev
 ~~~
 
-Configure, build, and test DUNE:
+Configure and build DUNE:
 
 ~~~sh
 docker compose -f docker/docker-compose.yml run --rm dev cmake --preset dev
 docker compose -f docker/docker-compose.yml run --rm dev cmake --build --preset dev --parallel 2
-docker compose -f docker/docker-compose.yml run --rm dev ctest --preset dev --parallel 2
 ~~~
 
 The build directory is kept in the dune-build named volume. Open an

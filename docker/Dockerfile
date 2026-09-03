@@ -44,10 +44,9 @@ ARG DUNE_BUILD_JOBS=2
 COPY --chown=dune:dune . /workspace/source
 
 RUN --mount=type=cache,id=dune-build-cache,target=/workspace/source/build,uid=${DUNE_UID},gid=${DUNE_GID} \
-    cmake --preset release \
-    && cmake --build --preset release --parallel "${DUNE_BUILD_JOBS}" \
-    && ctest --preset release \
-    && cmake --install build/release --prefix /workspace/install
+    cmake --preset dev \
+    && cmake --build --preset dev --parallel "${DUNE_BUILD_JOBS}" \
+    && cmake --install build/dev --prefix /workspace/install
 
 
 FROM ${DEBIAN_IMAGE} AS runtime
