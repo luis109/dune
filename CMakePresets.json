@@ -8,7 +8,7 @@
   "configurePresets": [
     {
       "name": "dev",
-      "displayName": "Debug development build",
+      "displayName": "Development build",
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build/dev",
       "cacheVariables": {
@@ -50,6 +50,14 @@
     {
       "name": "legacy",
       "configurePreset": "legacy"
+    },
+    {
+      "name": "package",
+      "displayName": "Build release package",
+      "configurePreset": "release",
+      "targets": [
+        "package"
+      ]
     }
   ],
   "testPresets": [
