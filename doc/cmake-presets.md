@@ -40,6 +40,22 @@ Replace `2` with a suitable number of concurrent compiler processes for the
 machine. The configure command must be run at least once before its build
 preset can be used. Run it again after changing CMake options or presets.
 
+### Starting with a fresh CMake cache
+
+A normal configure preserves values already stored in the build directory's
+`CMakeCache.txt`. To discard that configuration state and configure the preset
+from a fresh cache, use:
+
+~~~sh
+cmake --fresh --preset dev
+~~~
+
+This is useful after removing or renaming cache variables, or when an old
+cached value is producing unexpected behavior. Replace `dev` with the desired
+preset name. The `--fresh` option requires CMake 3.24 or newer; it recreates
+CMake's cache and generated configuration files but does not delete the entire
+build directory.
+
 ## Testing
 
 Tests have a separate configuration so that the normal development build does
