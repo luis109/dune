@@ -37,7 +37,6 @@ services:
       - "${DUNE_PROFILES:-Simulation}"
     ports:
       - "${DUNE_HTTP_PORT:-8080}:8080"
-      - "${DUNE_IMC_PORT:-6002}:6002/udp"
     stop_grace_period: 15s
     volumes:
       - dune-logs:/opt/dune/log
