@@ -1,0 +1,54 @@
+name: lsts-dune-multi-simulator
+
+x-simulator: &simulator
+  image: dune-simulator
+  pull_policy: never
+  init: true
+  stop_grace_period: 15s
+
+services:
+  waverider-1:
+    <<: *simulator
+    command:
+      - -c
+      - waverider-1
+      - -p
+      - Simulation
+      - -V
+      - waverider-1
+    volumes:
+      - waverider-1-logs:/opt/dune/log
+      - waverider-1-db:/opt/dune/db
+    networks:
+      dune_internal:
+        ipv4_address: 10.0.11.210
+
+  waverider-2:
+    <<: *simulator
+    command:
+      - -c
+      - waverider-2
+      - -p
+      - Simulation
+      - -V
+      - waverider-2
+    volumes:
+      - waverider-2-logs:/opt/dune/log
+      - waverider-2-db:/opt/dune/db
+    networks:
+      dune_internal:
+        ipv4_address: 10.0.11.220
+
+networks:
+  dune_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.11.0/24
+          gateway: 10.0.11.1
+
+volumes:
+  waverider-1-logs:
+  waverider-1-db:
+  waverider-2-logs:
+  waverider-2-db:
